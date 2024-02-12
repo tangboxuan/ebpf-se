@@ -2,6 +2,8 @@ ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 LIBBPF_DIR:=$(ROOT_DIR)/../../libbpf-stubbed/src
 COMMON_DIR:=$(ROOT_DIR)/../common
 PIX_DIR:= $(ROOT_DIR)/../..
+KLEE_PATH:=$(ROOT_DIR)/../../tool/deps/klee
+LIBXDP_PATH:=$(ROOT_DIR)/../../tool/deps/libxdp
 
 LLVM_RELEASE=12
 LLC=llc-$(LLVM_RELEASE)
@@ -10,9 +12,10 @@ CC := gcc
 UNAME_P := $(shell uname -p)
 
 XDP_C ?= ${XDP_TARGETS:=.c}
+XDP_BC = ${XDP_C:.c=.bc}
 XDP_OBJ = ${XDP_C:.c=.o}
 
-OBJECT_LIBBPF = $(LIBBPF_DIR)/libbpf.a
+OBJECT_LIBBPF = $(LIBBPF_DIR)/obj/libbpf.a
 
 # Extend if including Makefile already added some
 COMMON_OBJS += $(COMMON_DIR)/common_params.o $(COMMON_DIR)/common_user_bpf_xdp.o
@@ -72,7 +75,7 @@ xdp-target: $(XDP_C) Makefile $(KERN_USER_H) $(EXTRA_DEPS)
 		-Werror \
 		-fno-builtin \
 		-O0 -emit-llvm -c -g $(XDP_C)
-	# $(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
+	$(LLC) -I $(KLEE_INCLUDE) -march=bpf -filetype=obj $(XDP_BC) -o ${XDP_OBJ}
 
 libbpf:
 	cd $(LIBBPF_DIR) && bash build.sh
@@ -81,3 +84,15 @@ symbex:
 	/usr/bin/time -v \
 		klee -kdalloc -kdalloc-heap-start-address=0x00040000000 -kdalloc-heap-size=1 -libc=uclibc --external-calls=all --disable-verify \
 		-solver-backend=z3 --exit-on-error -max-memory=750000 -search=dfs $(XDP_TARGETS).bc
+
+loader: $(COMMON_DIR)/loader.c
+	gcc -I $(LIBXDP_PATH) $^ -o $(COMMON_DIR)/loader -lxdp
+
+load: $(COMMON_DIR)/loader
+	$(COMMON_DIR)/loader $(XDP_TARGETS).o $(XDP_FUNCTION)
+
+replayer: $(XDP_C)
+	$(CLANG) -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
+
+replay: replayer
+	KTEST_FILE=${f} ./replayer ; echo $$?
