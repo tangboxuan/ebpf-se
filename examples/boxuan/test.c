@@ -4,21 +4,21 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-/*
 #include <stdlib.h>
+/*
 #include <bpf/bpf_endian.h>
 */
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
 #endif
-/*
+
 struct boxuan_pkt {
 	struct ethhdr ether;
 	struct iphdr ipv4;
 	struct tcphdr tcp;
 	char payload[100];
 };
-*/
+
 
 
 #define CHECK_OUT_OF_BOUNDS(PTR, OFFSET, END)                                  \
@@ -48,8 +48,8 @@ int xdp_main(struct xdp_md* ctx) {
 			return XDP_DROP;
 
 	char* payload = (void *) tcp + sizeof(struct tcphdr);
-	//if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
-	//		return XDP_DROP;
+	if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
+			return XDP_DROP; 
 
 	if (payload[0] == '\0') return XDP_DROP;
 	

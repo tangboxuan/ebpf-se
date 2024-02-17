@@ -40,18 +40,19 @@ ifeq ($(REPLAY), 1)
 	BPF_CFLAGS += -DREPLAY
 endif
 
-clean:
-	rm -rf $(LIBBPF_DIR)/build
-	$(MAKE) -C $(LIBBPF_DIR) clean
-	$(MAKE) -C $(COMMON_DIR) clean
-	rm -f $(XDP_OBJ)
-	rm -f *.ll *.bc
-	rm -f *~
-
 clean-klee:
 	rm -rf $(ROOT_DIR)/klee-*
 	rm -f $(ROOT_DIR)/res-tree-*
 	rm -f $(ROOT_DIR)/neg-tree*
+
+clean: clean-klee
+	@#rm -rf $(LIBBPF_DIR)/build
+	@#$(MAKE) -C $(LIBBPF_DIR) clean
+	@#$(MAKE) -C $(COMMON_DIR) clean
+	rm -f $(XDP_OBJ)
+	rm -f *.ll *.bc
+	rm -f *~
+	rm -f replayer
 
 llvm-check: $(CLANG) $(LLC)
 	@for TOOL in $^ ; do \
@@ -92,6 +93,7 @@ symbex:
 #	$(CLANG) $(XDP_CFLAGS) $(COMMON_DIR)/loader.c -o $(COMMON_DIR)/loader -lxdp
 
 verify:
+	@if [ $(shell id -u) != 0 ]; then echo Requires sudo; exit 1; fi
 	@$(CLANG) \
 		-target bpf \
 		$(BPF_CFLAGS) \
@@ -102,17 +104,17 @@ verify:
 		-O2 -g -c $(XDP_C) -o $(XDP_OBJ)
 	@xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
 		if [ $$? = 0 ]; then \
-		echo $(XDP_FUNCTION) passed verification; \
+		echo $(XDP_TARGETS) $(XDP_FUNCTION) passed verification; \
 		xdp-loader unload lo --all; \
 		else \
-		echo $(XDP_FUNCTION) failed verification; \
+		echo $(XDP_TARGETS) $(XDP_FUNCTION) failed verification; \
 		cat verifier_log | awk '/-- BEGIN DUMP LOG ---/{flag=1; next}/libbpf: -- END LOG --/{flag=0} flag' ; \
 		fi
 	@rm verifier_log
 	@#$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)
 
-replayer: $(XDP_C)
-	$(CLANG) -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
+replayer:
+	$(CLANG) -DKLEE_VERIFICATION -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
 
 replay: replayer
 	@F=$(shell printf "%06d" $f); \
