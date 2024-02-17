@@ -3,4 +3,5 @@
 include ../Makefile
 
 XDP_TARGETS := test
+XDP_SECTION := xdp
 XDP_FUNCTION := xdp_main

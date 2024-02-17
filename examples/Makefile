@@ -4,10 +4,12 @@ COMMON_DIR:=$(ROOT_DIR)/../common
 PIX_DIR:= $(ROOT_DIR)/../..
 KLEE_PATH:=$(ROOT_DIR)/../../tool/deps/klee
 LIBXDP_PATH:=$(ROOT_DIR)/../../tool/deps/libxdp
+XDP_PATH:=$(ROOT_DIR)/../../tool/deps/xdp
 
 LLVM_RELEASE=12
 LLC=llc-$(LLVM_RELEASE)
 CLANG=clang-$(LLVM_RELEASE)
+LLVM_STRIP=llvm-strip-$(LLVM_RELEASE)
 CC := gcc
 UNAME_P := $(shell uname -p)
 
@@ -32,6 +34,7 @@ LDFLAGS ?= -L$(LIBBPF_DIR)
 
 BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I$(ROOT_DIR)/../headers/
 BPF_CFLAGS += -I /usr/include/$(UNAME_P)-linux-gnu
+XDP_CFLAGS = -I $(XDP_PATH)
 
 ifeq ($(REPLAY), 1)
 	BPF_CFLAGS += -DREPLAY
@@ -75,7 +78,7 @@ xdp-target: $(XDP_C) Makefile $(KERN_USER_H) $(EXTRA_DEPS)
 		-Werror \
 		-fno-builtin \
 		-O0 -emit-llvm -c -g $(XDP_C)
-	$(LLC) -I $(KLEE_INCLUDE) -march=bpf -filetype=obj $(XDP_BC) -o ${XDP_OBJ}
+	#$(LLC) -I $(KLEE_INCLUDE) -march=bpf -filetype=obj $(XDP_BC) -o ${XDP_OBJ}
 
 libbpf:
 	cd $(LIBBPF_DIR) && bash build.sh
@@ -83,16 +86,28 @@ libbpf:
 symbex:
 	/usr/bin/time -v \
 		klee -kdalloc -kdalloc-heap-start-address=0x00040000000 -kdalloc-heap-size=1 -libc=uclibc --external-calls=all --disable-verify \
-		-solver-backend=z3 --exit-on-error -max-memory=750000 -search=dfs $(XDP_TARGETS).bc
+		-solver-backend=z3 --exit-on-error -max-memory=750000 -search=dfs $(XDP_BC)
 
-loader: $(COMMON_DIR)/loader.c
-	gcc -I $(LIBXDP_PATH) $^ -o $(COMMON_DIR)/loader -lxdp
+loader:
+	$(CLANG) $(XDP_CFLAGS) $(COMMON_DIR)/loader.c -o $(COMMON_DIR)/loader -lxdp
 
-load: $(COMMON_DIR)/loader
-	$(COMMON_DIR)/loader $(XDP_TARGETS).o $(XDP_FUNCTION)
+load:
+	$(CLANG) \
+		-target bpf \
+		$(BPF_CFLAGS) \
+		-D__USE_VMLINUX__ \
+		-D__TARGET_ARCH_x86 \
+		-DBPF_NO_PRESERVE_ACCESS_INDEX \
+		-fno-builtin \
+		-O2 -g -c $(XDP_C) -o $(XDP_OBJ)
+	#$(LLVM_STRIP) -g $(XDP_OBJ)
+	$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)
 
 replayer: $(XDP_C)
 	$(CLANG) -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
 
 replay: replayer
-	KTEST_FILE=${f} ./replayer ; echo $$?
+	@F=$(shell printf "%06d" $f); \
+	ktest-tool klee-last/test$$F.ktest; \
+	echo Return Value: ;\
+	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo $$?
