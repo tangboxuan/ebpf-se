@@ -88,11 +88,11 @@ symbex:
 		klee -kdalloc -kdalloc-heap-start-address=0x00040000000 -kdalloc-heap-size=1 -libc=uclibc --external-calls=all --disable-verify \
 		-solver-backend=z3 --exit-on-error -max-memory=750000 -search=dfs $(XDP_BC)
 
-loader:
-	$(CLANG) $(XDP_CFLAGS) $(COMMON_DIR)/loader.c -o $(COMMON_DIR)/loader -lxdp
+#loader:
+#	$(CLANG) $(XDP_CFLAGS) $(COMMON_DIR)/loader.c -o $(COMMON_DIR)/loader -lxdp
 
-load:
-	$(CLANG) \
+verify:
+	@$(CLANG) \
 		-target bpf \
 		$(BPF_CFLAGS) \
 		-D__USE_VMLINUX__ \
@@ -100,8 +100,16 @@ load:
 		-DBPF_NO_PRESERVE_ACCESS_INDEX \
 		-fno-builtin \
 		-O2 -g -c $(XDP_C) -o $(XDP_OBJ)
-	#$(LLVM_STRIP) -g $(XDP_OBJ)
-	$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)
+	@xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
+		if [ $$? = 0 ]; then \
+		echo $(XDP_FUNCTION) passed verification; \
+		xdp-loader unload lo --all; \
+		else \
+		echo $(XDP_FUNCTION) failed verification; \
+		cat verifier_log | awk '/-- BEGIN DUMP LOG ---/{flag=1; next}/libbpf: -- END LOG --/{flag=0} flag' ; \
+		fi
+	@rm verifier_log
+	@#$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)
 
 replayer: $(XDP_C)
 	$(CLANG) -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
