@@ -48,8 +48,8 @@ int xdp_main(struct xdp_md* ctx) {
 			return XDP_DROP;
 
 	char* payload = (void *) tcp + sizeof(struct tcphdr);
-	if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
-			return XDP_DROP; 
+	//if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
+	//		return XDP_DROP; 
 
 	if (payload[0] == '\0') return XDP_DROP;
 	

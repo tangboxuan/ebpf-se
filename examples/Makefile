@@ -116,8 +116,13 @@ verify:
 replayer:
 	$(CLANG) -DKLEE_VERIFICATION -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
 
-replay: replayer
+viewer:
+	g++ -I $(KLEE_INCLUDE) \
+		$(COMMON_DIR)/ktest_viewer.c \
+		$(KLEE_PATH)/build/lib/Basic/CMakeFiles/kleeBasic.dir/KTest.cpp.o \
+		-o $(COMMON_DIR)/ktest_viewer
+
+replay:
 	@F=$(shell printf "%06d" $f); \
-	ktest-tool klee-last/test$$F.ktest; \
-	echo Return Value: ;\
-	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo $$?
+	$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
+	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo Return Value: $$?
