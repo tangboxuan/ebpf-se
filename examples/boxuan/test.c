@@ -10,6 +10,7 @@
 */
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
+#include "assert.h"
 #endif
 
 struct boxuan_pkt {
@@ -48,12 +49,26 @@ int xdp_main(struct xdp_md* ctx) {
 			return XDP_DROP;
 
 	char* payload = (void *) tcp + sizeof(struct tcphdr);
-	//if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
-	//		return XDP_DROP; 
+	if (CHECK_OUT_OF_BOUNDS(payload, 1, data_end))
+			return XDP_DROP; 
 
 	if (payload[0] == '\0') return XDP_DROP;
 	
 
+	return XDP_PASS;
+}
+
+int xdp_spec(struct xdp_md* ctx) {
+	struct ethhdr* eth = (void *)(long)ctx->data;
+	struct iphdr *ip = (void *) eth + sizeof(struct ethhdr);
+
+	if (ip->protocol != IPPROTO_TCP) {
+			return XDP_PASS;
+	}
+
+	struct tcphdr *tcp = (void *) ip + sizeof(struct iphdr);
+	char* payload = (void *) tcp + sizeof(struct tcphdr);
+	if (payload[0] == '\0') return XDP_DROP;
 	return XDP_PASS;
 }
 
@@ -72,6 +87,8 @@ int main() {
 	test.data_meta = 0;
 	test.ingress_ifindex = 0;
 	test.rx_queue_index = 0;
+	assert(xdp_main(&test) == xdp_spec(&test));
+	return 0;
 	return xdp_main(&test);
 }
 #endif

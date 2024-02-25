@@ -1,4 +1,5 @@
 #define KBUILD_MODNAME "foo"
+#include <stdint.h>
 #include <linux/bpf.h>
 #include <linux/in.h>
 #include <linux/if_ether.h>
@@ -58,6 +59,57 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 	.value_size = sizeof(struct flow_ctx_table_leaf),
 	.max_entries = 1024,
 };
+
+int xdp_fw_spec(struct xdp_md *ctx)
+{
+	struct flow_ctx_table_leaf new_flow = {0};
+	struct flow_ctx_table_key flow_key  = {0};
+	struct flow_ctx_table_leaf *flow_leaf;
+
+	struct ethhdr *ethernet = (void*)(long)ctx->data;
+	struct iphdr        *ip = (void*)ethernet + sizeof(*ethernet);
+
+	int ingress_ifindex;
+	ingress_ifindex = ctx->ingress_ifindex;
+	if(ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP){
+			goto EOP;
+	}
+	
+	struct udphdr      *l4 = (void*)ip + sizeof(*ip);
+	/* flow key */
+	flow_key.ip_proto = ip->protocol;
+
+	flow_key.ip_src = ip->saddr;
+	flow_key.ip_dst = ip->daddr;
+	flow_key.l4_src = l4->source;
+	flow_key.l4_dst = l4->dest;
+
+	biflow(&flow_key);
+
+	if (ingress_ifindex == B_PORT){
+		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
+			
+		if (flow_leaf)
+			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+		else 
+			return XDP_DROP;
+	} else {
+		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
+			
+		if (!flow_leaf){
+			new_flow.in_port = B_PORT;
+			new_flow.out_port = A_PORT; //ctx->ingress_ifindex ;
+			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, BPF_ANY);
+		}
+		
+		return bpf_redirect_map(&tx_port, B_PORT, 0);
+	}
+
+
+EOP:
+	return XDP_DROP;
+
+}
 
 
 SEC("xdp_fw")

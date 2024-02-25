@@ -32,8 +32,9 @@ KERN_USER_H ?= $(wildcard common_kern_user.h)
 
 LDFLAGS ?= -L$(LIBBPF_DIR)
 
-BPF_CFLAGS ?= -I$(LIBBPF_DIR)/build/usr/include/ -I$(ROOT_DIR)/../headers/
-BPF_CFLAGS += -I /usr/include/$(UNAME_P)-linux-gnu
+BPF_CFLAGS ?= -I$(ROOT_DIR)/../headers/ -I /usr/include/$(UNAME_P)-linux-gnu
+KLEE_BPF_CFLAGS ?= $(BPF_CFLAGS) -I$(LIBBPF_DIR)/build/usr/include/ 
+ACTUAL_BPF_CFLAGS ?= $(BPF_CFLAGS) 
 XDP_CFLAGS = -I $(XDP_PATH)
 
 ifeq ($(REPLAY), 1)
@@ -66,7 +67,7 @@ xdp-target: $(XDP_C) Makefile $(KERN_USER_H) $(EXTRA_DEPS)
 	$(CLANG) \
 		-target bpf \
 		-DKLEE_VERIFICATION\
-		$(BPF_CFLAGS) \
+		$(KLEE_BPF_CFLAGS) \
 		-I $(KLEE_INCLUDE) \
 		-D__USE_VMLINUX__ \
 		-D__TARGET_ARCH_x86 \
@@ -96,12 +97,13 @@ verify:
 	@if [ $(shell id -u) != 0 ]; then echo Requires sudo; exit 1; fi
 	@$(CLANG) \
 		-target bpf \
-		$(BPF_CFLAGS) \
+		$(ACTUAL_BPF_CFLAGS) \
 		-D__USE_VMLINUX__ \
 		-D__TARGET_ARCH_x86 \
 		-DBPF_NO_PRESERVE_ACCESS_INDEX \
 		-fno-builtin \
-		-O2 -g -c $(XDP_C) -o $(XDP_OBJ)
+		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) \
+		2> /dev/null
 	@xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
 		if [ $$? = 0 ]; then \
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) passed verification; \

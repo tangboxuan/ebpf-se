@@ -1,5 +1,8 @@
 /* Driver for klee verification */
+#ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
+#include "assert.h"
+#endif
 #include <stdlib.h>
 
 #ifndef USES_BPF_MAPS
@@ -27,6 +30,7 @@ struct __attribute__((__packed__)) pkt {
   char payload[1500];
 };
 
+#ifdef KLEE_VERIFICATION
 int main(int argc, char** argv){
   BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
   BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
@@ -59,7 +63,7 @@ int main(int argc, char** argv){
   test.rx_queue_index = 0;
   
   bpf_begin();
-  if (xdp_fw_prog(&test))
-    return 1;
+  assert(xdp_fw_prog(&test) == xdp_fw_spec(&test));
   return 0;
 }
+#endif
