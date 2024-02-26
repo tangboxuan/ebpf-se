@@ -60,14 +60,14 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 	.max_entries = 1024,
 };
 
+#include "../common_spec/packet.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
 	struct flow_ctx_table_leaf new_flow = {0};
 	struct flow_ctx_table_key flow_key  = {0};
 	struct flow_ctx_table_leaf *flow_leaf;
 
-	struct ethhdr *ethernet = (void*)(long)ctx->data;
-	struct iphdr        *ip = (void*)ethernet + sizeof(*ethernet);
+	struct iphdr        *ip = get_iphdr(ctx);
 
 	int ingress_ifindex;
 	ingress_ifindex = ctx->ingress_ifindex;
@@ -75,7 +75,8 @@ int xdp_fw_spec(struct xdp_md *ctx)
 			goto EOP;
 	}
 	
-	struct udphdr      *l4 = (void*)ip + sizeof(*ip);
+	struct udphdr      *l4 = get_iphdr(ctx);
+	return XDP_DROP;
 	/* flow key */
 	flow_key.ip_proto = ip->protocol;
 
@@ -104,7 +105,6 @@ int xdp_fw_spec(struct xdp_md *ctx)
 		
 		return bpf_redirect_map(&tx_port, B_PORT, 0);
 	}
-
 
 EOP:
 	return XDP_DROP;

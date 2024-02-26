@@ -238,6 +238,43 @@ OUT:
   return action;
 }
 
+
+int xdp_prog_spec(struct xdp_md *ctx) {
+  void *data_end = (void *)(long)ctx->data_end;
+  void *data = (void *)(long)ctx->data;
+  struct ethhdr *ethh;
+  struct iphdr *iph;
+  struct tcphdr *tcph;
+  __u32 action = XDP_PASS; /* Default action */
+  struct hdr_cursor nh;
+  int nh_type;
+  int ip_type;
+
+  nh.pos = data;
+
+  nh_type = parse_ethhdr(&nh, data_end, &ethh);
+  if (nh_type != bpf_htons(ETH_P_IP)) {
+    goto OUT;
+  }
+  ip_type = parse_iphdr(&nh, data_end, &iph);
+  if (ip_type != IPPROTO_TCP) {
+    goto OUT;
+  }
+  if (parse_tcphdr(&nh, data_end, &tcph) < 0) {
+    action = XDP_ABORTED;
+    goto OUT;
+  }
+  if ((tcph->ack)) {
+    goto OUT;
+  }
+  if (tcph->syn) {
+    action = handle_syn(ctx, ethh, iph, tcph);
+  }
+
+OUT:
+  return action;
+}
+
 /** Symbex driver starts here **/
 
 #ifdef KLEE_VERIFICATION
@@ -294,8 +331,7 @@ int main(int argc, char **argv) {
 
   bpf_begin();
   /* Invoking target function */
-  if (xdp_prog_simple(&test))
-    return 1;
+  assert(xdp_prog_simple(&test)==xdp_prog_spec(&test));
   return 0;
 }
 

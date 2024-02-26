@@ -20,8 +20,6 @@ struct boxuan_pkt {
 	char payload[100];
 };
 
-
-
 #define CHECK_OUT_OF_BOUNDS(PTR, OFFSET, END)                                  \
         (((void *)PTR) + OFFSET > ((void *)END))
 
@@ -58,9 +56,10 @@ int xdp_main(struct xdp_md* ctx) {
 	return XDP_PASS;
 }
 
+#include "../common_spec/packet.h"
 int xdp_spec(struct xdp_md* ctx) {
-	struct ethhdr* eth = (void *)(long)ctx->data;
-	struct iphdr *ip = (void *) eth + sizeof(struct ethhdr);
+	struct ethhdr* eth = get_ethhdr(ctx);
+	struct iphdr *ip = get_iphdr(ctx);
 
 	if (ip->protocol != IPPROTO_TCP) {
 			return XDP_PASS;
