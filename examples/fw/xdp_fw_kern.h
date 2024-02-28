@@ -59,15 +59,15 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 	.value_size = sizeof(struct flow_ctx_table_leaf),
 	.max_entries = 1024,
 };
-
-#include "../common_spec/packet.h"
+#ifdef KLEE_VERIFICATION
+#include "../common/parsing_helpers_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
 	struct flow_ctx_table_leaf new_flow = {0};
 	struct flow_ctx_table_key flow_key  = {0};
 	struct flow_ctx_table_leaf *flow_leaf;
 
-	struct iphdr        *ip = get_iphdr(ctx);
+	struct iphdr *ip = get_iphdr(ctx);
 
 	int ingress_ifindex;
 	ingress_ifindex = ctx->ingress_ifindex;
@@ -75,7 +75,7 @@ int xdp_fw_spec(struct xdp_md *ctx)
 			goto EOP;
 	}
 	
-	struct udphdr      *l4 = get_iphdr(ctx);
+	struct udphdr *l4 = get_udphdr(ctx);
 	return XDP_DROP;
 	/* flow key */
 	flow_key.ip_proto = ip->protocol;
@@ -110,7 +110,7 @@ EOP:
 	return XDP_DROP;
 
 }
-
+#endif
 
 SEC("xdp_fw")
 int xdp_fw_prog(struct xdp_md *ctx)

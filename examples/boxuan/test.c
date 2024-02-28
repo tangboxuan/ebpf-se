@@ -13,7 +13,7 @@
 #include "assert.h"
 #endif
 
-struct boxuan_pkt {
+struct __attribute__((__packed__)) boxuan_pkt {
 	struct ethhdr ether;
 	struct iphdr ipv4;
 	struct tcphdr tcp;
@@ -56,22 +56,19 @@ int xdp_main(struct xdp_md* ctx) {
 	return XDP_PASS;
 }
 
-#include "../common_spec/packet.h"
+#ifdef KLEE_VERIFICATION
 int xdp_spec(struct xdp_md* ctx) {
-	struct ethhdr* eth = get_ethhdr(ctx);
-	struct iphdr *ip = get_iphdr(ctx);
+	struct boxuan_pkt *packet = (void *)(long)(ctx->data);
+	struct iphdr *ip = (void *)&(packet->ipv4);
+	char *payload = (void *)&(packet->payload);
 
 	if (ip->protocol != IPPROTO_TCP) {
 			return XDP_PASS;
 	}
-
-	struct tcphdr *tcp = (void *) ip + sizeof(struct iphdr);
-	char* payload = (void *) tcp + sizeof(struct tcphdr);
 	if (payload[0] == '\0') return XDP_DROP;
 	return XDP_PASS;
 }
 
-#ifdef KLEE_VERIFICATION
 int main() {      
 	struct boxuan_pkt *pkt = malloc(sizeof(struct boxuan_pkt));
 	klee_make_symbolic(pkt, sizeof(struct boxuan_pkt), "pkt");
@@ -88,6 +85,6 @@ int main() {
 	test.rx_queue_index = 0;
 	assert(xdp_main(&test) == xdp_spec(&test));
 	return 0;
-	return xdp_main(&test);
+	// return xdp_main(&test);
 }
 #endif

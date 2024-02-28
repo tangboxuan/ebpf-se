@@ -3,4 +3,5 @@
 include ../Makefile
 
 XDP_TARGETS := fw
+XDP_SECTION := xdp_fw
 XDP_FUNCTION := xdp_fw_prog

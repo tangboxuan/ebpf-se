@@ -102,8 +102,8 @@ verify:
 		-D__TARGET_ARCH_x86 \
 		-DBPF_NO_PRESERVE_ACCESS_INDEX \
 		-fno-builtin \
-		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) \
-		2> /dev/null
+		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) 
+	@echo $(XDP_C) compiled!
 	@xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
 		if [ $$? = 0 ]; then \
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) passed verification; \
@@ -128,3 +128,5 @@ replay:
 	@F=$(shell printf "%06d" $f); \
 	$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
 	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo Return Value: $$?
+
+assert: xdp-target symbex

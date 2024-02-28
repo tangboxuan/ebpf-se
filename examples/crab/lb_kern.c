@@ -238,11 +238,11 @@ OUT:
   return action;
 }
 
-
+#ifdef KLEE_VERIFICATION
+#include "../common/parsing_helpers_spec.h"
 int xdp_prog_spec(struct xdp_md *ctx) {
   void *data_end = (void *)(long)ctx->data_end;
   void *data = (void *)(long)ctx->data;
-  struct ethhdr *ethh;
   struct iphdr *iph;
   struct tcphdr *tcph;
   __u32 action = XDP_PASS; /* Default action */
@@ -252,7 +252,9 @@ int xdp_prog_spec(struct xdp_md *ctx) {
 
   nh.pos = data;
 
-  nh_type = parse_ethhdr(&nh, data_end, &ethh);
+  struct ethhdr *ethh = get_ethhdr(ctx);
+  nh_type = ethh->h_proto;
+
   if (nh_type != bpf_htons(ETH_P_IP)) {
     goto OUT;
   }
@@ -277,7 +279,6 @@ OUT:
 
 /** Symbex driver starts here **/
 
-#ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
 #include <stdlib.h>
 
