@@ -115,6 +115,7 @@ verify:
 	@rm verifier_log
 	@#$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)
 
+.PHONY: replayer
 replayer:
 	$(CLANG) -DKLEE_VERIFICATION -I $(KLEE_INCLUDE) -L $(KLEE_PATH)/build/lib $(XDP_C) -lkleeRuntest -o replayer
 
