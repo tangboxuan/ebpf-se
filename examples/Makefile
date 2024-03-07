@@ -128,6 +128,6 @@ viewer:
 replay:
 	@F=$(shell printf "%06d" $f); \
 	$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
-	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo Return Value: $$?
+	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; #echo Return Value: $$?
 
 assert: xdp-target symbex

@@ -63,8 +63,8 @@ int xdp_main(struct xdp_md *ctx) {
 
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
-#include <assert.h>
 #include <stdlib.h>
+#include "../common/verify.h"
 int xdp_spec(struct xdp_md *ctx) {
 	struct pkt *packet = (void *)(long)(ctx->data);
 	struct iphdr *ip = (void*)&(packet->ipv4);
@@ -76,43 +76,10 @@ int xdp_spec(struct xdp_md *ctx) {
 		return XDP_DROP;
 	}
 	if (payload[1] == '\0') {
-		payload[2] = '\2';
+		payload[2] = '\1';
 		return XDP_PASS;
 	}
 	return XDP_PASS;
-}
-
-typedef int(*xdp_func)(struct xdp_md*);
-struct xdp_end_state {
-	int rvalue;
-	struct pkt pkt;
-};
-
-#include <stdbool.h>
-#include <string.h>
-bool xdp_end_state_equal(struct xdp_end_state *a, struct xdp_end_state *b) {
-	return a->rvalue == b->rvalue && memcmp(&(a->pkt), &(b->pkt), sizeof(struct pkt)) == 0;
-}
-
-struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx) {
-	struct xdp_end_state s;
-	s.rvalue = f(ctx);
-	memcpy(&(s.pkt), (void*)(long)ctx->data, sizeof (struct pkt));
-	return s;
-}
-
-void functional_verify(xdp_func prog, xdp_func spec, struct pkt* packet) {
-	struct xdp_md ctx;
-	struct xdp_md ctx_copy;
-	struct pkt* packet_copy = malloc(sizeof(struct pkt));
-	memcpy(packet_copy, packet, sizeof(struct pkt));
-	ctx.data = (long)packet;
-	ctx.data_end = (long)(packet + 1);
-	ctx_copy.data = (long)packet_copy;
-	ctx_copy.data_end = (long)(packet_copy + 1);
-	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, &ctx);
-	struct xdp_end_state spec_end_state = get_xdp_end_state(spec, &ctx_copy);
-	assert(xdp_end_state_equal(&prog_end_state, &spec_end_state));
 }
 
 int main() {
@@ -121,7 +88,7 @@ int main() {
 	// struct xdp_md test;
 	// test.data = (long)(packet);
 	// test.data_end = (long)(packet + 1);
-	functional_verify(xdp_main, xdp_spec, packet);
+	functional_verify(xdp_main, xdp_spec, packet, sizeof(struct pkt));
 	return 0;
 }
 #endif
