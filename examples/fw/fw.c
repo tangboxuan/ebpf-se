@@ -31,6 +31,7 @@ struct __attribute__((__packed__)) pkt {
 };
 
 #ifdef KLEE_VERIFICATION
+#include "../common/verify.h"
 int main(int argc, char** argv){
   BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
   BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
@@ -63,7 +64,7 @@ int main(int argc, char** argv){
   test.rx_queue_index = 0;
   
   bpf_begin();
-  assert(xdp_fw_prog(&test) == xdp_fw_spec(&test));
+  functional_verify(xdp_fw_prog, xdp_fw_spec, &test, sizeof(struct pkt), 0);
   return 0;
 }
 #endif

@@ -15,21 +15,26 @@ bool xdp_end_state_equal(struct xdp_end_state *a, struct xdp_end_state *b, size_
 	return a->rvalue == b->rvalue && memcmp(a->pkt, b->pkt, packet_size) == 0;
 }
 
-struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t packet_size) {
+struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t eth_offset) {
 	struct xdp_end_state s;
+	s.pkt = (void*)(long)(ctx->data) - eth_offset;
 	s.rvalue = f(ctx);
-    s.pkt = (void*)(long)ctx->data;
 	return s;
 }
 
-void functional_verify(xdp_func prog, xdp_func spec, struct xdp_md *ctx, size_t packet_size) {
+void functional_verify(xdp_func prog, 
+					   xdp_func spec, 
+					   struct xdp_md *ctx, 
+					   size_t packet_size,
+					   size_t eth_offset) {
 	struct xdp_md ctx_copy;
-	void* packet_copy = malloc(packet_size);
     memcpy(&ctx_copy, ctx, sizeof(struct xdp_md));
-	memcpy(packet_copy, (void*)(long)(ctx->data), packet_size);
-	ctx_copy.data = (long)packet_copy;
+	void* packet = (void*)(long)(ctx->data) - eth_offset;
+	void* packet_copy = malloc(packet_size);
+	memcpy(packet_copy, packet, packet_size);
+	ctx_copy.data = (long)(packet_copy + eth_offset);
 	ctx_copy.data_end = (long)(packet_copy + packet_size);
-	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, ctx, packet_size);
-	struct xdp_end_state spec_end_state = get_xdp_end_state(spec, &ctx_copy, packet_size);
+	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, ctx, eth_offset);
+	struct xdp_end_state spec_end_state = get_xdp_end_state(spec, &ctx_copy, eth_offset);
 	assert(xdp_end_state_equal(&prog_end_state, &spec_end_state, packet_size));
 }

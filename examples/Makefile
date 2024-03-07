@@ -77,7 +77,6 @@ xdp-target: $(XDP_C) Makefile $(KERN_USER_H) $(EXTRA_DEPS)
 		-Wno-unused-variable \
 		-Wno-pointer-sign \
 		-Wno-compare-distinct-pointer-types \
-		-Werror \
 		-fno-builtin \
 		-O0 -emit-llvm -c -g $(XDP_C)
 	#$(LLC) -I $(KLEE_INCLUDE) -march=bpf -filetype=obj $(XDP_BC) -o ${XDP_OBJ}

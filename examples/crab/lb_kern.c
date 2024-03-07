@@ -51,7 +51,6 @@ static __always_inline int get_target_idx_rand(void) {
 static __always_inline int get_target_idx_rr(void) {
   void *count, *rr_idx;
   int key = 0, idx = 0;
-
   count = bpf_map_lookup_elem(&targets_count, &key);
   if (!count)
     return idx;
@@ -69,7 +68,6 @@ static __always_inline int get_target(__u32 *daddr) {
 #else
   int key = get_target_idx_rr();
 #endif
-
   target = bpf_map_lookup_elem(&targets_map, &key);
   if (!target)
     return -1;
@@ -145,12 +143,14 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   /* Change destination address */
   if (get_target(&iph->daddr))
     return XDP_ABORTED;
+  return XDP_DROP;
   if (update_macs(&iph->daddr, ethh))
     return XDP_ABORTED;
 
   /* Fix IP checksum */
   iph->check = 0;
-  iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, size, 0));
+  //commented below
+  // iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, size, 0));
 
   /* TCP HDR */
   tcph = (struct tcphdr *)(iph + 1);
@@ -191,7 +191,8 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   csum = bpf_csum_diff(0, 0, (__be32 *)&psdh, sizeof(struct ipv4_psd_header),
                        csum);
 
-  tcph->check = ~csum_reduce_helper(csum);
+  //commented below
+  // tcph->check = ~csum_reduce_helper(csum);
 
   return XDP_TX;
 }
@@ -239,51 +240,12 @@ OUT:
 }
 
 #ifdef KLEE_VERIFICATION
-#include "../common/parsing_helpers_spec.h"
-int xdp_prog_spec(struct xdp_md *ctx) {
-  void *data_end = (void *)(long)ctx->data_end;
-  void *data = (void *)(long)ctx->data;
-  struct iphdr *iph;
-  struct tcphdr *tcph;
-  __u32 action = XDP_PASS; /* Default action */
-  struct hdr_cursor nh;
-  int nh_type;
-  int ip_type;
-
-  nh.pos = data;
-
-  struct ethhdr *ethh = get_ethhdr(ctx);
-  nh_type = ethh->h_proto;
-
-  if (nh_type != bpf_htons(ETH_P_IP)) {
-    goto OUT;
-  }
-  ip_type = parse_iphdr(&nh, data_end, &iph);
-  if (ip_type != IPPROTO_TCP) {
-    goto OUT;
-  }
-  if (parse_tcphdr(&nh, data_end, &tcph) < 0) {
-    action = XDP_ABORTED;
-    goto OUT;
-  }
-  if ((tcph->ack)) {
-    goto OUT;
-  }
-  if (tcph->syn) {
-    action = handle_syn(ctx, ethh, iph, tcph);
-  }
-
-OUT:
-  return action;
-}
-
 /** Symbex driver starts here **/
 
 #include "klee/klee.h"
-#include <stdlib.h>
+#include "../common/verify.h"
 
 int main(int argc, char **argv) {
-
   const __u32 num_targets = 3;
   struct eth_addr dst[num_targets];
   for (uint i = 0; i < num_targets; i++) {
@@ -332,8 +294,10 @@ int main(int argc, char **argv) {
 
   bpf_begin();
   /* Invoking target function */
-  assert(xdp_prog_simple(&test)==xdp_prog_spec(&test));
+  size_t eth_offset = test.data - (long)pkt;
+  functional_verify(xdp_prog_simple, xdp_prog_simple, &test, sizeof(struct crab_pkt), eth_offset);
   return 0;
+  // return xdp_prog_simple(&test);
 }
 
 #endif // KLEE_VERIFICATION

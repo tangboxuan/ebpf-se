@@ -79,12 +79,17 @@ int xdp_spec(struct xdp_md *ctx) {
 		payload[2] = '\1';
 		return XDP_PASS;
 	}
+	if (payload[10] == '\x08') {
+		payload[20] = '\x09';
+		return XDP_PASS;
+	}
 	return XDP_PASS;
 }
 
 int main() {
 	struct pkt *packet = malloc(sizeof(struct pkt));
 	klee_make_symbolic(packet, sizeof(*packet), "packet");
+	// packet->payload[0] = '\1';
 	struct xdp_md test;
 	test.data = (long)(packet);
 	test.data_end = (long)(packet + 1);
