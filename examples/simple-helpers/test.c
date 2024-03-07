@@ -85,10 +85,10 @@ int xdp_spec(struct xdp_md *ctx) {
 int main() {
 	struct pkt *packet = malloc(sizeof(struct pkt));
 	klee_make_symbolic(packet, sizeof(*packet), "packet");
-	// struct xdp_md test;
-	// test.data = (long)(packet);
-	// test.data_end = (long)(packet + 1);
-	functional_verify(xdp_main, xdp_spec, packet, sizeof(struct pkt));
+	struct xdp_md test;
+	test.data = (long)(packet);
+	test.data_end = (long)(packet + 1);
+	functional_verify(xdp_main, xdp_spec, &test, sizeof(struct pkt));
 	return 0;
 }
 #endif
