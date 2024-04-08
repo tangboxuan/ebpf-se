@@ -143,14 +143,15 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   /* Change destination address */
   if (get_target(&iph->daddr))
     return XDP_ABORTED;
-  return XDP_DROP;
   if (update_macs(&iph->daddr, ethh))
     return XDP_ABORTED;
 
   /* Fix IP checksum */
   iph->check = 0;
-  //commented below
+
+  // CANNOT VERIFY HERE
   // iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, size, 0));
+  // CANNOT VERIFY HERE
 
   /* TCP HDR */
   tcph = (struct tcphdr *)(iph + 1);
@@ -171,15 +172,15 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
 
   /* Fix TCP CSUM */
   tcph->check = 0;
-  csum = bpf_csum_diff(0, 0, (__be32 *)tcph,
-                       sizeof(struct tcphdr) + sizeof(struct redir_opt), 0);
+  // csum = bpf_csum_diff(0, 0, (__be32 *)tcph,
+                      //  sizeof(struct tcphdr) + sizeof(struct redir_opt), 0);
   opt = ptr + sizeof(struct redir_opt);
 #pragma unroll
   for (i = 0; i < MAX_OPT_WORDS; i++) {
     if (opt + 1 > data_end)
       break;
 
-    csum = bpf_csum_diff(0, 0, opt, sizeof(__u32), csum);
+    // csum = bpf_csum_diff(0, 0, opt, sizeof(__u32), csum);
     opt++;
   }
   csum = csum_reduce_helper(csum);
@@ -188,11 +189,12 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   psdh.zero = 0;
   psdh.proto = IPPROTO_TCP;
   psdh.len = bpf_htons(bpf_ntohs(iph->tot_len) - sizeof(struct iphdr));
-  csum = bpf_csum_diff(0, 0, (__be32 *)&psdh, sizeof(struct ipv4_psd_header),
-                       csum);
+  // csum = bpf_csum_diff(0, 0, (__be32 *)&psdh, sizeof(struct ipv4_psd_header),
+                      //  csum);
 
-  //commented below
-  // tcph->check = ~csum_reduce_helper(csum);
+  // CANNOT VERIFY HERE
+  tcph->check = ~csum_reduce_helper(csum);
+  // CANNOT VERIFY HERE
 
   return XDP_TX;
 }
@@ -245,7 +247,7 @@ OUT:
 #include "klee/klee.h"
 #include "../common/verify.h"
 
-int main(int argc, char **argv) {
+int set_up_maps() {
   const __u32 num_targets = 3;
   struct eth_addr dst[num_targets];
   for (uint i = 0; i < num_targets; i++) {
@@ -276,7 +278,11 @@ int main(int argc, char **argv) {
     if (bpf_map_update_elem(&macs_map, &ipaddrs[i], &dst[i], 0) < 0)
       return -1;
   }
+  return 0;
+}
 
+int main(int argc, char **argv) {
+  if (set_up_maps()) return -1;
   /* Step 3: Making input struct xdp_md symbolic */
   struct crab_pkt *pkt = malloc(sizeof(struct crab_pkt));
   klee_make_symbolic(pkt, sizeof(struct crab_pkt), "lb_pkt");
@@ -295,8 +301,7 @@ int main(int argc, char **argv) {
   bpf_begin();
   /* Invoking target function */
   size_t eth_offset = test.data - (long)pkt;
-  functional_verify(xdp_prog_simple, xdp_prog_simple, &test, sizeof(struct crab_pkt), eth_offset);
-  return 0;
+  return functional_verify(xdp_prog_simple, xdp_prog_simple, &test, sizeof(struct crab_pkt), eth_offset, set_up_maps);
   // return xdp_prog_simple(&test);
 }
 
