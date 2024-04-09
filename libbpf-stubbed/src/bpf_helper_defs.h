@@ -1018,6 +1018,7 @@ static __attribute__ ((noinline)) __s64 bpf_csum_diff(__be32 *from, __u32 from_s
   // }
   __s64 csum;
   klee_make_symbolic(&csum, sizeof(__s64), "Updated Checksum");
+  csum = 0x1a1f1a1f;
   return csum;
 }
 #else

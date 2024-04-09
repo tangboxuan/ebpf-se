@@ -24,10 +24,6 @@
 
 #include "lb_kern.h"
 
-/* Necessary for all klee calls, e.g., klee_make_symbolic() */
-#ifdef KLEE_VERIFICATION
-#include "klee/klee.h"
-#endif
 
 static __always_inline __u16 csum_reduce_helper(__u32 csum) {
   csum = ((csum & 0xffff0000) >> 16) + (csum & 0xffff);
@@ -149,9 +145,7 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   /* Fix IP checksum */
   iph->check = 0;
 
-  // CANNOT VERIFY HERE
-  // iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, size, 0));
-  // CANNOT VERIFY HERE
+  iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, size, 0));
 
   /* TCP HDR */
   tcph = (struct tcphdr *)(iph + 1);
@@ -172,15 +166,15 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
 
   /* Fix TCP CSUM */
   tcph->check = 0;
-  // csum = bpf_csum_diff(0, 0, (__be32 *)tcph,
-                      //  sizeof(struct tcphdr) + sizeof(struct redir_opt), 0);
+  csum = bpf_csum_diff(0, 0, (__be32 *)tcph,
+                        sizeof(struct tcphdr) + sizeof(struct redir_opt), 0);
   opt = ptr + sizeof(struct redir_opt);
 #pragma unroll
   for (i = 0; i < MAX_OPT_WORDS; i++) {
     if (opt + 1 > data_end)
       break;
 
-    // csum = bpf_csum_diff(0, 0, opt, sizeof(__u32), csum);
+    csum = bpf_csum_diff(0, 0, opt, sizeof(__u32), csum);
     opt++;
   }
   csum = csum_reduce_helper(csum);
@@ -189,12 +183,10 @@ static __always_inline int handle_syn(struct xdp_md *ctx, struct ethhdr *ethh,
   psdh.zero = 0;
   psdh.proto = IPPROTO_TCP;
   psdh.len = bpf_htons(bpf_ntohs(iph->tot_len) - sizeof(struct iphdr));
-  // csum = bpf_csum_diff(0, 0, (__be32 *)&psdh, sizeof(struct ipv4_psd_header),
-                      //  csum);
+  csum = bpf_csum_diff(0, 0, (__be32 *)&psdh, sizeof(struct ipv4_psd_header),
+                        csum);
 
-  // CANNOT VERIFY HERE
   tcph->check = ~csum_reduce_helper(csum);
-  // CANNOT VERIFY HERE
 
   return XDP_TX;
 }
@@ -243,6 +235,29 @@ OUT:
 
 #ifdef KLEE_VERIFICATION
 /** Symbex driver starts here **/
+#include "../common/parsing_helpers_spec.h"
+int xdp_prog_spec(struct xdp_md *ctx) {
+  __u32 action = XDP_PASS; /* Default action */
+  
+  struct ethhdr *ethh = get_eth(ctx);
+  if (get_eth_proto(ctx) != bpf_htons(ETH_P_IP)) {
+    goto OUT;
+  }
+  struct iphdr *iph = get_ip(ctx);
+  if (get_ip_protocol(ctx) != IPPROTO_TCP) {
+    goto OUT;
+  }
+  struct tcphdr *tcph = get_tcp(ctx);
+  if ((tcph->ack)) {
+    goto OUT;
+  }
+  if (tcph->syn) {
+    action = handle_syn(ctx, ethh, iph, tcph);
+  }
+OUT:
+  return action;
+}
+
 
 #include "klee/klee.h"
 #include "../common/verify.h"
@@ -282,7 +297,6 @@ int set_up_maps() {
 }
 
 int main(int argc, char **argv) {
-  if (set_up_maps()) return -1;
   /* Step 3: Making input struct xdp_md symbolic */
   struct crab_pkt *pkt = malloc(sizeof(struct crab_pkt));
   klee_make_symbolic(pkt, sizeof(struct crab_pkt), "lb_pkt");
@@ -301,7 +315,7 @@ int main(int argc, char **argv) {
   bpf_begin();
   /* Invoking target function */
   size_t eth_offset = test.data - (long)pkt;
-  return functional_verify(xdp_prog_simple, xdp_prog_simple, &test, sizeof(struct crab_pkt), eth_offset, set_up_maps);
+  return functional_verify(xdp_prog_simple, xdp_prog_spec, &test, sizeof(struct crab_pkt), eth_offset, set_up_maps);
   // return xdp_prog_simple(&test);
 }
 

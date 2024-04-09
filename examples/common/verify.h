@@ -40,6 +40,9 @@ int functional_verify(xdp_func prog,
 	ctx_copy.data = (long)(packet_copy + eth_offset);
 	ctx_copy.data_end = (long)(packet_copy + packet_size);
 
+	// Set up maps
+	if (set_up_maps()) return -1;
+
 	// Run the program
 	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, ctx, eth_offset);
 

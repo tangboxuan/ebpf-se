@@ -28,7 +28,10 @@ int main() {
 	struct pkt *packet = malloc(sizeof(struct pkt));
 	klee_make_symbolic(packet, sizeof(*packet), "packet");
 	struct xdp_md test;
+	struct xdp_md test2;
 	klee_make_symbolic(&test, sizeof(test), "test");
+	klee_make_symbolic(&test2, sizeof(test), "test");
+	assert(memcmp(&test, &test2, sizeof(struct xdp_md)) == 0);
 	test.data = (long)(packet);
 	test.data_end = (long)(packet + 1);
 	assert(xdp_main(&test)==xdp_spec(&test));
