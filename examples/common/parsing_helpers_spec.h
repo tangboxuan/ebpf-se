@@ -42,7 +42,7 @@ int get_ip_protocol(struct xdp_md *ctx) {
     return ip->protocol;
 }
 
-struct tcphdr* get_tcp(struct xdp_md *ctx) {
+void* get_tcp_udp(struct xdp_md *ctx) {
     struct iphdr *ip = get_ip(ctx);
     int iphdr_size = ip->ihl * 4;
     return ((void*)(ip)) + iphdr_size;

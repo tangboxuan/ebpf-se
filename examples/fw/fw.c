@@ -32,7 +32,7 @@ struct __attribute__((__packed__)) pkt {
 
 #ifdef KLEE_VERIFICATION
 #include "../common/verify.h"
-int main(int argc, char** argv){
+int set_up_maps() {
   BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
   BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
 
@@ -46,8 +46,9 @@ int main(int argc, char** argv){
       return -1;
   }
   /* Init done */
+}
 
-
+int main(int argc, char** argv){
   struct pkt *pkt = malloc(sizeof(struct pkt));
   klee_make_symbolic(pkt, sizeof(struct pkt), "user_buf");
   pkt->ether.h_proto = bpf_htons(ETH_P_IP);
@@ -64,7 +65,7 @@ int main(int argc, char** argv){
   test.rx_queue_index = 0;
   
   bpf_begin();
-  functional_verify(xdp_fw_prog, xdp_fw_spec, &test, sizeof(struct pkt), 0);
-  return 0;
+
+  return functional_verify(xdp_fw_prog, xdp_fw_spec, &test, sizeof(struct pkt), 0, set_up_maps);
 }
 #endif

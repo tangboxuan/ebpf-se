@@ -66,9 +66,9 @@ int xdp_fw_spec(struct xdp_md *ctx)
 {
 	
 	struct flow_ctx_table_leaf new_flow = {0};
-	struct ethhdr *ethernet = get_l2(ctx);
-	struct iphdr *ip = get_l3(ethernet);
-	struct udphdr *l4 = get_l4(ip);
+	struct ethhdr *ethernet = get_eth(ctx);
+	struct iphdr *ip = get_ip(ctx);
+	struct udphdr *l4 = get_tcp_udp(ctx);
 	
 	if(ethernet->h_proto != BE_ETH_P_IP)
 		goto EOP;
