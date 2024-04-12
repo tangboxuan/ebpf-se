@@ -101,6 +101,7 @@ verify:
 		-D__TARGET_ARCH_x86 \
 		-DBPF_NO_PRESERVE_ACCESS_INDEX \
 		-fno-builtin \
+		-Wno-missing-declarations \
 		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) 
 	@echo $(XDP_C) compiled!
 	@../verification_tools/xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \

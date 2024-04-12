@@ -18,6 +18,7 @@
 #endif
 
 #include <bpf/bpf_helpers.h>
+#include "../verification_tools/assert_spec.h"
 
 struct __attribute__((__packed__)) pkt {
   struct ethhdr ether;
@@ -27,7 +28,7 @@ struct __attribute__((__packed__)) pkt {
 };
 
 // struct {
-// __uint(type, BPF_MAP_TYPE_ARRAY);
+// 	__uint(type, BPF_MAP_TYPE_ARRAY);
 // 	__type(key, int);
 // 	__type(value, int);
 // 	__uint(max_entries, 4);
@@ -39,7 +40,6 @@ struct bpf_map_def SEC("maps") example_table = {
 	.value_size = sizeof(int),
 	.max_entries = 8,
 };
-
 
 SEC("xdp")
 int xdp_main(struct xdp_md *ctx) {
@@ -80,47 +80,27 @@ int xdp_main(struct xdp_md *ctx) {
 	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
 	if (!lookuped_value) return XDP_DROP;
 	payload[0] = *lookuped_value;
+	BPF_ASSERT(payload[0]==0);
 
 	if (payload[1] == '\0') {
 		int value = 1;
 		bpf_map_update_elem(&example_table, &key, &value, 0);
+		BPF_ASSERT_MAP(&example_table, &key, &value);
 	}
 
 	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
 	if (!lookuped_value) return XDP_DROP;
 	payload[2] = *lookuped_value;
+	BPF_ASSERT(payload[2]==0||payload[2]==1);
 	return XDP_PASS;
 
 	EOP:
 		return XDP_DROP;
 }
 
+
 #ifdef KLEE_VERIFICATION
-#include "klee/klee.h"
-#include <stdlib.h>
-#include "../verification_tools/full_spec.h"
-int xdp_spec(struct xdp_md *ctx) {
-	struct pkt *packet = (void *)(long)(ctx->data);
-	struct iphdr *ip = (void*)&(packet->ipv4);
-	char *payload = (void *)&(packet->payload);
-
-	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
-
-	int key = 0;
-
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[0] = *lookuped_value;
-
-	if (payload[1] == '\0') {
-		int value = 1;
-		bpf_map_update_elem(&example_table, &key, &value, 0);
-	}
-
-	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[2] = *lookuped_value;
-	return XDP_PASS;
-}
-
+#include "../verification_tools/common.h"
 int set_up_maps() {
   BPF_MAP_INIT(&example_table, "example_table", "example_key", "example_value");
   int key = 0;
@@ -132,7 +112,8 @@ int set_up_maps() {
 
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
-	functional_verify(xdp_main, xdp_spec, packet, sizeof(struct pkt), 0, set_up_maps);
-	return 0;
+	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
+	set_up_maps();
+	xdp_main(ctx);
 }
 #endif

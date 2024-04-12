@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <linux/bpf.h>
-#include <klee/klee.h>
+#include "common.h"
 
 typedef int(*xdp_func)(struct xdp_md*);
 typedef int(*set_up_maps_func)(void);
@@ -22,12 +22,6 @@ struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t et
 	s.pkt = (void*)(long)(ctx->data) - eth_offset;
 	s.rvalue = f(ctx);
 	return s;
-}
-
-void* create_packet(size_t pkt_size) {
-	void *packet = malloc(pkt_size);
-	klee_make_symbolic(packet, pkt_size, "packet");
-	return packet;
 }
 
 int functional_verify(xdp_func prog, 
