@@ -26,12 +26,20 @@ struct __attribute__((__packed__)) pkt {
   char payload[1500];
 };
 
+// struct {
+// 	__uint(type, BPF_MAP_TYPE_ARRAY);
+// 	__type(key, int);
+// 	__type(value, int);
+// 	__uint(max_entries, 4);
+// } example_table SEC(".maps");
+
 struct bpf_map_def SEC("maps") example_table = {
-	.type = BPF_MAP_TYPE_HASH,
+	.type = BPF_MAP_TYPE_ARRAY,
 	.key_size = sizeof(int),
 	.value_size = sizeof(int),
 	.max_entries = 8,
 };
+
 
 SEC("xdp")
 int xdp_main(struct xdp_md *ctx) {
@@ -68,13 +76,19 @@ int xdp_main(struct xdp_md *ctx) {
 		goto EOP;
 
 	int key = 0;
+	
+	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	if (!lookuped_value) return XDP_DROP;
+	payload[0] = *lookuped_value;
 
-	if (payload[0] == '\0') {
+	if (payload[1] == '\0') {
 		int value = 1;
 		bpf_map_update_elem(&example_table, &key, &value, 0);
 	}
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[1] = *lookuped_value;
+
+	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	if (!lookuped_value) return XDP_DROP;
+	payload[2] = *lookuped_value;
 	return XDP_PASS;
 
 	EOP:
@@ -84,7 +98,7 @@ int xdp_main(struct xdp_md *ctx) {
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
 #include <stdlib.h>
-#include "../common/verify.h"
+#include "../verification_tools/verify.h"
 int xdp_spec(struct xdp_md *ctx) {
 	struct pkt *packet = (void *)(long)(ctx->data);
 	struct iphdr *ip = (void*)&(packet->ipv4);
@@ -93,13 +107,17 @@ int xdp_spec(struct xdp_md *ctx) {
 	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
 
 	int key = 0;
-	
-	if (payload[0] == '\0') {
+
+	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	payload[0] = *lookuped_value;
+
+	if (payload[1] == '\0') {
 		int value = 1;
 		bpf_map_update_elem(&example_table, &key, &value, 0);
 	}
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[1] = *lookuped_value;
+
+	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	payload[2] = *lookuped_value;
 	return XDP_PASS;
 }
 
@@ -113,12 +131,8 @@ int set_up_maps() {
 }
 
 int main() {
-	struct pkt *packet = malloc(sizeof(struct pkt));
-	klee_make_symbolic(packet, sizeof(*packet), "packet");
-	struct xdp_md test;
-	test.data = (long)(packet);
-	test.data_end = (long)(packet + 1);
-	functional_verify(xdp_main, xdp_spec, &test, sizeof(struct pkt), 0, set_up_maps);
+	struct pkt *packet = create_packet(sizeof(struct pkt));
+	functional_verify(xdp_main, xdp_spec, packet, sizeof(struct pkt), 0, set_up_maps);
 	return 0;
 }
 #endif

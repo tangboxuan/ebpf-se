@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <linux/bpf.h>
+#include <klee/klee.h>
 
 typedef int(*xdp_func)(struct xdp_md*);
 typedef int(*set_up_maps_func)(void);
@@ -23,28 +24,37 @@ struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t et
 	return s;
 }
 
+void* create_packet(size_t pkt_size) {
+	void *packet = malloc(pkt_size);
+	klee_make_symbolic(packet, pkt_size, "packet");
+	return packet;
+}
+
 int functional_verify(xdp_func prog, 
 					   xdp_func spec, 
-					   struct xdp_md *ctx, 
+					   void *packet, 
 					   size_t packet_size,
 					   size_t eth_offset,
 					   set_up_maps_func set_up_maps) {
 	// Make a copy of packet
-	void* packet = (void*)(long)(ctx->data) - eth_offset;
+	// void* packet = (void*)(long)(ctx->data) - eth_offset;
 	void* packet_copy = malloc(packet_size);
 	memcpy(packet_copy, packet, packet_size);
 
 	// Make a copy of ctx
+	struct xdp_md ctx;
 	struct xdp_md ctx_copy;
-    memcpy(&ctx_copy, ctx, sizeof(struct xdp_md));
-	ctx_copy.data = (long)(packet_copy + eth_offset);
-	ctx_copy.data_end = (long)(packet_copy + packet_size);
+    memcpy(&ctx_copy, &ctx, sizeof(struct xdp_md));
+	ctx.data = (long)packet + eth_offset;
+	ctx.data_end = (long)packet + packet_size;
+	ctx_copy.data = (long)packet_copy + eth_offset;
+	ctx_copy.data_end = (long)packet_copy + packet_size;
 
 	// Set up maps
 	if (set_up_maps != NULL && set_up_maps()) return -1;
 
 	// Run the program
-	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, ctx, eth_offset);
+	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, &ctx, eth_offset);
 
 	// Reset maps
 	if (set_up_maps != NULL && set_up_maps()) return -1;
