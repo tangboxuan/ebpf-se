@@ -103,13 +103,13 @@ verify:
 		-fno-builtin \
 		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) 
 	@echo $(XDP_C) compiled!
-	@xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
+	@../verification_tools/xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
 		if [ $$? = 0 ]; then \
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) passed verification; \
-		xdp-loader unload lo --all; \
+		../verification_tools/xdp-loader unload lo --all; \
 		else \
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) failed verification; \
-		cat verifier_log | awk '/-- BEGIN DUMP LOG ---/{flag=1; next}/libbpf: -- END LOG --/{flag=0} flag' ; \
+		cat verifier_log | awk '/-- BEGIN /{flag=1; next}/libbpf: -- END /{flag=0} flag' ; \
 		fi
 	@rm verifier_log
 	@#$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)

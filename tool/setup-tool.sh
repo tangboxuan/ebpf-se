@@ -252,7 +252,7 @@ source_install_klee()
 								-DENABLE_DOXYGEN=ON \
 								..
 
-		make $(nproc)
+		make
 	popd
 }
 

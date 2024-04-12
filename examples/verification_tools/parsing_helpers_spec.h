@@ -1,15 +1,15 @@
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include "parsing_helpers.h"
+#include "../common/parsing_helpers.h"
 
 struct ethhdr* get_eth(struct xdp_md *ctx) {
-    return (void*)(long)(ctx->data);
+    return (struct ethhdr*)(long)(ctx->data);
 }
 
 int get_eth_proto(struct xdp_md *ctx) {
     struct ethhdr *eth = get_eth(ctx);
-    struct vlan_hdr *vlh = (void*)(eth+1);
+    struct vlan_hdr *vlh = (struct vlan_hdr*)(eth+1);
     __u16 h_proto = eth->h_proto;
 
     for (int i = 0; i < VLAN_MAX_DEPTH; i++) {
@@ -24,7 +24,7 @@ int get_eth_proto(struct xdp_md *ctx) {
 
 struct iphdr* get_ip(struct xdp_md *ctx) {
     struct ethhdr *eth = get_eth(ctx);
-    struct vlan_hdr *vlh = (void*)(eth+1);
+    struct vlan_hdr *vlh = (struct vlan_hdr *)(eth+1);
     __u16 h_proto = eth->h_proto;
 
     for (int i = 0; i < VLAN_MAX_DEPTH; i++) {

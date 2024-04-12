@@ -46,7 +46,7 @@ int xdp_main(struct xdp_md *ctx) {
 	eth = data;
 	nh_off = sizeof(*eth);
 	if (data  + nh_off  > data_end)
-	 	goto EOP;
+		goto EOP;
 
 	ip = data + nh_off;
 	nh_off += sizeof(*ip);
@@ -63,7 +63,7 @@ int xdp_main(struct xdp_md *ctx) {
 	 	goto EOP;
 
 	payload = data + nh_off;
-	nh_off += 1;
+	nh_off += 3;
 	if (data + nh_off  > data_end)
 		goto EOP;
 

@@ -235,8 +235,7 @@ OUT:
 
 #ifdef KLEE_VERIFICATION
 /** Symbex driver starts here **/
-#include "../common/parsing_helpers_spec.h"
-
+#include "../verification_tools/parsing_helpers_spec.h"
 int handle_syn_spec(struct xdp_md *ctx, struct ethhdr *ethh,
                     struct iphdr *iph, struct tcphdr *tcph) {
 
@@ -334,7 +333,6 @@ int handle_syn_spec(struct xdp_md *ctx, struct ethhdr *ethh,
 
   return XDP_TX;
 }
-
 int xdp_prog_spec(struct xdp_md *ctx) {
   __u32 action = XDP_PASS; /* Default action */
 
@@ -359,7 +357,7 @@ OUT:
 
 
 #include "klee/klee.h"
-#include "../common/verify.h"
+#include "../verification_tools/verify.h"
 
 int set_up_maps() {
   const __u32 num_targets = 3;
