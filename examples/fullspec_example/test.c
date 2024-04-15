@@ -132,7 +132,8 @@ int set_up_maps() {
 
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
-	functional_verify(xdp_main, xdp_spec, packet, sizeof(struct pkt), 0, set_up_maps);
+	struct xdp_md *ctx = create_ctx();
+	functional_verify(xdp_main, xdp_spec, packet, ctx, sizeof(struct pkt), 0, set_up_maps);
 	return 0;
 }
 #endif

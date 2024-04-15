@@ -8,10 +8,8 @@ void* create_packet(size_t pkt_size) {
 	return packet;
 }
 
-struct xdp_md* create_ctx(void* pkt, size_t pkt_size, size_t eth_offset) {
-    struct xdp_md* ctx = (struct xdp_md*) malloc(sizeof(struct xdp_md));
+struct xdp_md* create_ctx() {
+    void* ctx = malloc(sizeof(struct xdp_md));
     klee_make_symbolic(ctx, sizeof(struct xdp_md), "ctx");
-    ctx->data = (long)pkt + eth_offset;
-    ctx->data_end = (long)pkt + pkt_size;
     return (struct xdp_md*)ctx;
 }

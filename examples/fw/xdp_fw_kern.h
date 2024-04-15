@@ -61,7 +61,7 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 };
 #ifdef KLEE_VERIFICATION
 
-#include "../common/parsing_helpers_spec.h"
+#include "../verification_tools/parsing_helpers_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
 	

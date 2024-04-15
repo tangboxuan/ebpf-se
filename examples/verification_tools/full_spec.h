@@ -26,21 +26,22 @@ struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t et
 
 int functional_verify(xdp_func prog, 
 					   xdp_func spec, 
-					   void *packet, 
+					   void* packet,
+					   struct xdp_md *ctx, 
 					   size_t packet_size,
 					   size_t eth_offset,
 					   set_up_maps_func set_up_maps) {
+	// Set up ctx
+	ctx->data = (long)packet + eth_offset;
+	ctx->data_end = (long)packet + packet_size;
+	
 	// Make a copy of packet
-	// void* packet = (void*)(long)(ctx->data) - eth_offset;
-	void* packet_copy = malloc(packet_size);
-	memcpy(packet_copy, packet, packet_size);
+	void* packet_copy = malloc(packet_size - eth_offset);
+	memcpy(packet_copy, packet, packet_size - eth_offset);
 
 	// Make a copy of ctx
-	struct xdp_md ctx;
 	struct xdp_md ctx_copy;
-    memcpy(&ctx_copy, &ctx, sizeof(struct xdp_md));
-	ctx.data = (long)packet + eth_offset;
-	ctx.data_end = (long)packet + packet_size;
+    memcpy(&ctx_copy, ctx, sizeof(struct xdp_md));
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
@@ -48,7 +49,7 @@ int functional_verify(xdp_func prog,
 	if (set_up_maps != NULL && set_up_maps()) return -1;
 
 	// Run the program
-	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, &ctx, eth_offset);
+	struct xdp_end_state prog_end_state = get_xdp_end_state(prog, ctx, eth_offset);
 
 	// Reset maps
 	if (set_up_maps != NULL && set_up_maps()) return -1;
