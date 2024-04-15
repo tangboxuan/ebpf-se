@@ -64,7 +64,6 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/parsing_helpers_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
-	
 	struct flow_ctx_table_leaf new_flow = {0};
 	struct ethhdr *ethernet = get_eth(ctx);
 	struct iphdr *ip = get_ip(ctx);
@@ -112,7 +111,6 @@ EOP:
 SEC("xdp_fw")
 int xdp_fw_prog(struct xdp_md *ctx)
 {
-	
 	void* data_end = (void*)(long)ctx->data_end;
 	void* data         = (void*)(long)ctx->data;
 	
