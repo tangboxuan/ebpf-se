@@ -101,7 +101,6 @@ verify:
 		-D__TARGET_ARCH_x86 \
 		-DBPF_NO_PRESERVE_ACCESS_INDEX \
 		-fno-builtin \
-		-Wno-missing-declarations \
 		-O2 -g -c $(XDP_C) -o $(XDP_OBJ) 
 	@echo $(XDP_C) compiled!
 	@../verification_tools/xdp-loader load -m skb lo $(XDP_OBJ) -vv 2> verifier_log; \
@@ -109,8 +108,13 @@ verify:
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) passed verification; \
 		../verification_tools/xdp-loader unload lo --all; \
 		else \
+		grep -Fxq "legacy map definitions" verifier_log; \
+		if [ $$? ]; then \
+		echo Legacy BPF map definitions not supported; \
+		else \
 		echo $(XDP_TARGETS) $(XDP_FUNCTION) failed verification; \
 		cat verifier_log | awk '/-- BEGIN /{flag=1; next}/libbpf: -- END /{flag=0} flag' ; \
+		fi \
 		fi
 	@rm verifier_log
 	@#$(COMMON_DIR)/loader $(XDP_OBJ) $(XDP_SECTION) $(XDP_FUNCTION)

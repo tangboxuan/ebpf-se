@@ -17,10 +17,6 @@
 #define USES_BPF_MAP_UPDATE_ELEM
 #endif
 
-#ifndef USES_BPF_MAP_DELETE_ELEM
-#define USES_BPF_MAP_DELETE_ELEM
-#endif
-
 #include <bpf/bpf_helpers.h>
 #include "../verification_tools/assert_spec.h"
 
