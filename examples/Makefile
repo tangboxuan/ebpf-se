@@ -130,4 +130,4 @@ replay:
 	$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
 	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; #echo Return Value: $$?
 
-assert: xdp-target symbex
+assert: clean-klee xdp-target symbex

@@ -30,7 +30,7 @@ struct __attribute__((__packed__)) pkt {
 // __uint(type, BPF_MAP_TYPE_ARRAY);
 // 	__type(key, int);
 // 	__type(value, int);
-// 	__uint(max_entries, 4);
+// 	__uint(max_entries, 8);
 // } example_table SEC(".maps");
 
 struct bpf_map_def SEC("maps") example_table = {
@@ -132,8 +132,8 @@ int set_up_maps() {
 
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
-	struct xdp_md *ctx = create_ctx();
-	functional_verify(xdp_main, xdp_spec, packet, ctx, sizeof(struct pkt), 0, set_up_maps);
+	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
+	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0, set_up_maps);
 	return 0;
 }
 #endif

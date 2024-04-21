@@ -26,16 +26,12 @@ struct xdp_end_state get_xdp_end_state(xdp_func f, struct xdp_md* ctx, size_t et
 
 int functional_verify(xdp_func prog, 
 					   xdp_func spec, 
-					   void* packet,
 					   struct xdp_md *ctx, 
 					   size_t packet_size,
 					   size_t eth_offset,
 					   set_up_maps_func set_up_maps) {
-	// Set up ctx
-	ctx->data = (long)packet + eth_offset;
-	ctx->data_end = (long)packet + packet_size;
-	
 	// Make a copy of packet
+	void* packet = (void*)(long)ctx->data;
 	void* packet_copy = malloc(packet_size - eth_offset);
 	memcpy(packet_copy, packet, packet_size - eth_offset);
 

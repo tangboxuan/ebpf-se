@@ -17,6 +17,10 @@
 #define USES_BPF_MAP_UPDATE_ELEM
 #endif
 
+#ifndef USES_BPF_MAP_DELETE_ELEM
+#define USES_BPF_MAP_DELETE_ELEM
+#endif
+
 #include <bpf/bpf_helpers.h>
 #include "../verification_tools/assert_spec.h"
 
@@ -76,22 +80,24 @@ int xdp_main(struct xdp_md *ctx) {
 		goto EOP;
 
 	int key = 0;
+	int value = 0;
 	
 	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
 	if (!lookuped_value) return XDP_DROP;
 	payload[0] = *lookuped_value;
-	BPF_ASSERT(payload[0]==0);
+	BPF_ASSERT("", payload[0]==0);
+	BPF_ASSERT_MAP_VALUE(&example_table, &key, &value);
 
 	if (payload[1] == '\0') {
-		int value = 1;
+		value = 1;
 		bpf_map_update_elem(&example_table, &key, &value, 0);
-		BPF_ASSERT_MAP(&example_table, &key, &value);
+		BPF_ASSERT_MAP_VALUE(&example_table, &key, &value);
 	}
 
 	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
 	if (!lookuped_value) return XDP_DROP;
 	payload[2] = *lookuped_value;
-	BPF_ASSERT(payload[2]==0||payload[2]==1);
+	BPF_ASSERT("", payload[2]==value);
 	return XDP_PASS;
 
 	EOP:
