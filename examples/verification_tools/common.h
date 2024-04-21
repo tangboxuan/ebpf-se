@@ -2,6 +2,10 @@
 #include <linux/bpf.h>
 #include <klee/klee.h>
 
+#ifndef VERIFICAION_HELPERS
+#define VERIFICAION_HELPERS
+typedef int(*xdp_func)(struct xdp_md*);
+
 uint32_t ipv4_uint8_to_uint32(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     uint32_t result = 0;
     result += a;
@@ -27,3 +31,4 @@ struct xdp_md* create_ctx(void* packet, size_t packet_size, size_t eth_offset) {
 	ctx->data_end = (long)packet + packet_size;
     return (struct xdp_md*)ctx;
 }
+#endif

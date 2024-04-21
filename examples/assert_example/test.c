@@ -9,14 +9,6 @@
 #define USES_BPF_MAPS
 #endif
 
-#ifndef USES_BPF_MAP_LOOKUP_ELEM
-#define USES_BPF_MAP_LOOKUP_ELEM
-#endif
-
-#ifndef USES_BPF_MAP_UPDATE_ELEM
-#define USES_BPF_MAP_UPDATE_ELEM
-#endif
-
 #include <bpf/bpf_helpers.h>
 #include "../verification_tools/assert_spec.h"
 
@@ -43,6 +35,9 @@ struct bpf_map_def SEC("maps") example_table = {
 
 SEC("xdp")
 int xdp_main(struct xdp_md *ctx) {
+	BPF_ASSERT_NOT_RETURN(XDP_ABORTED);
+	BPF_ASSERT_NOT_RETURN(XDP_REDIRECT);
+
 	void* data     = (void*)(long)ctx->data;
 	void* data_end = (void*)(long)ctx->data_end;
 	struct ethhdr *eth;
@@ -62,60 +57,63 @@ int xdp_main(struct xdp_md *ctx) {
 		goto EOP;
 
 	if(ip->protocol != IPPROTO_TCP){
-		return XDP_PASS;
+		BPF_RETURN(XDP_PASS);
 	}
 
 	tcp = data + nh_off;
 	nh_off += sizeof(*tcp);
-	if (data + nh_off  > data_end)
+	if (data + nh_off  > data_end) {
 	 	goto EOP;
+	}
+	BPF_ASSERT_NOT_RETURN(XDP_DROP);
 
 	payload = data + nh_off;
+	BPF_ASSERT_LEADS_TO(payload[0] != '\0', XDP_PASS);
+	BPF_ASSERT_LEADS_TO(payload[0] == '\0', XDP_TX);
+	BPF_ASSERT_IF_THEN_EQ(XDP_PASS, &payload[1], char, '\0');
+	BPF_ASSERT_IF_THEN_NEQ(XDP_PASS, &payload[0], char, '\0');
+	BPF_ASSERT_IF_THEN_EQ(XDP_TX, &payload[2], char, '\1');
+
 	nh_off += 3;
 	if (data + nh_off  > data_end)
 		goto EOP;
 
-	int key = 0;
-	int value = 0;
-	
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	if (!lookuped_value) return XDP_DROP;
-	payload[0] = *lookuped_value;
-	BPF_ASSERT("", payload[0]==0);
-	BPF_ASSERT_MAP_VALUE(&example_table, &key, &value);
 
-	if (payload[1] == '\0') {
-		value = 1;
-		bpf_map_update_elem(&example_table, &key, &value, 0);
-		BPF_ASSERT_MAP_VALUE(&example_table, &key, &value);
+	char value = '\0';
+	
+	if (payload[0] == value) {
+		BPF_ASSERT_RETURN(XDP_TX);
+
+		value = '\1';
+		if (payload[2] != value)
+			payload[2] = value;
+		
+		BPF_ASSERT("", payload[2]=='\1');
+		BPF_RETURN(XDP_TX);
 	}
 
-	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	if (!lookuped_value) return XDP_DROP;
-	payload[2] = *lookuped_value;
-	BPF_ASSERT("", payload[2]==value);
-	return XDP_PASS;
+	BPF_ASSERT("", payload[0]!=0);
+	BPF_ASSERT_RETURN(XDP_PASS);
+	BPF_ASSERT_CONSTANT(&value, sizeof(value));
+
+	payload[1] = value;
+	BPF_RETURN(XDP_PASS);
 
 	EOP:
-		return XDP_DROP;
+		BPF_RETURN(XDP_DROP);
 }
 
 
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/common.h"
-int set_up_maps() {
-  BPF_MAP_INIT(&example_table, "example_table", "example_key", "example_value");
-  int key = 0;
-  int value = 0;
-  if(bpf_map_update_elem(&example_table, &key, &value, 0) < 0)
-    return -1;
-  return 0;
-}
+// int set_up_maps() {
+//   return 0;
+// }
 
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
 	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
-	set_up_maps();
+	// set_up_maps();
 	xdp_main(ctx);
 }
 #endif

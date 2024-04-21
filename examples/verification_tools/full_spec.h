@@ -5,7 +5,6 @@
 #include <linux/bpf.h>
 #include "common.h"
 
-typedef int(*xdp_func)(struct xdp_md*);
 typedef int(*set_up_maps_func)(void);
 
 struct xdp_end_state {

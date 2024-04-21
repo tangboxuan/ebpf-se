@@ -87,7 +87,7 @@ int xdp_fw_prog(struct xdp_md *ctx)
 
 	ethernet = data ;
 	nh_off = sizeof(*ethernet);
-	if (data  + nh_off  > data_end)
+	if (data  + nh_off  > data_end) 
 		goto EOP;
 	
 	
