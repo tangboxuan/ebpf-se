@@ -37,6 +37,7 @@ SEC("xdp")
 int xdp_main(struct xdp_md *ctx) {
 	BPF_ASSERT_NOT_RETURN(XDP_ABORTED);
 	BPF_ASSERT_NOT_RETURN(XDP_REDIRECT);
+	// BPF_ASSERT_NOT_RETURN(XDP_DROP);
 
 	void* data     = (void*)(long)ctx->data;
 	void* data_end = (void*)(long)ctx->data_end;
@@ -65,19 +66,22 @@ int xdp_main(struct xdp_md *ctx) {
 	if (data + nh_off  > data_end) {
 	 	goto EOP;
 	}
-	BPF_ASSERT_NOT_RETURN(XDP_DROP);
 
 	payload = data + nh_off;
-	BPF_ASSERT_LEADS_TO(payload[0] != '\0', XDP_PASS);
-	BPF_ASSERT_LEADS_TO(payload[0] == '\0', XDP_TX);
-	BPF_ASSERT_IF_THEN_EQ(XDP_PASS, &payload[1], char, '\0');
-	BPF_ASSERT_IF_THEN_NEQ(XDP_PASS, &payload[0], char, '\0');
-	BPF_ASSERT_IF_THEN_EQ(XDP_TX, &payload[2], char, '\1');
+	BPF_ASSERT_IF_THEN_EQ(payload[0] != '\0', &payload[1], char, '\0');
+	BPF_ASSERT_IF_THEN_NEQ(payload[0] != '\0', &payload[0], char, '\0');
+	BPF_ASSERT_IF_THEN_EQ(payload[0] == '\0', &payload[2], char, '\1');
+
+	BPF_ASSERT_LEADS_TO_ACTION(payload[0] != '\0', XDP_PASS);
+	BPF_ASSERT_LEADS_TO_ACTION(payload[0] == '\0', XDP_TX);
+
+	BPF_ASSERT_IF_ACTION_THEN_EQ(XDP_PASS, &payload[1], char, '\0');
+	BPF_ASSERT_IF_ACTION_THEN_NEQ(XDP_PASS, &payload[0], char, '\0');
+	BPF_ASSERT_IF_ACTION_THEN_EQ(XDP_TX, &payload[2], char, '\1');
 
 	nh_off += 3;
 	if (data + nh_off  > data_end)
 		goto EOP;
-
 
 	char value = '\0';
 	
@@ -91,7 +95,6 @@ int xdp_main(struct xdp_md *ctx) {
 		BPF_ASSERT("", payload[2]=='\1');
 		BPF_RETURN(XDP_TX);
 	}
-
 	BPF_ASSERT("", payload[0]!=0);
 	BPF_ASSERT_RETURN(XDP_PASS);
 	BPF_ASSERT_CONSTANT(&value, sizeof(value));
