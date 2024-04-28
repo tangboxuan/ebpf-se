@@ -8,8 +8,7 @@
 
 int expected_return = -1;
 
-int expected_not_returns_count = 0;
-enum xdp_action expected_not_returns[4];
+bool expected_not_returns[XDP_REDIRECT+1] = { false };
 
 #define MAX_CONSTANTS 10
 int constants = 0;
@@ -38,13 +37,16 @@ void* if_expecteds[MAX_IFS];
 size_t if_sizes[MAX_IFS];
 
 void _set_expected_return(value) {
+    bool contradiction = !expected_not_returns[value];
+    assert(contradiction && "Previously asserted that this value is not expected");
     expected_return = value;
 }
 
 void _set_expected_not_return(value) {
-    assert(expected_not_returns_count < 4 && "Maximum of 4 BPF_ASSERT_NOT_RETURN expected");
-    expected_not_returns[expected_not_returns_count] = value;
-    expected_not_returns_count++;
+    assert(value <= XDP_REDIRECT && "Invalid XDP return code");
+    bool contradiction = value != expected_return;
+    assert(contradiction && "Previously asserted that this value is expected");
+    expected_not_returns[value] = true;
 }
 
 void _add_constant(void* ptr, size_t len) {
@@ -85,15 +87,15 @@ void _add_if(void* addr, void *value, size_t size, bool if_bool) {
 
 void _run_unrestricted_asserts(enum xdp_action return_value) {
     bool bpf_assert_return = expected_return == -1 || expected_return == return_value;
-    assert(bpf_assert_return && "Return value not equal to expected");
-    for (int i = 0; i < expected_not_returns_count; i++) {
-        bool bpf_assert_not_return = expected_not_returns[i] != return_value;
-        assert(bpf_assert_not_return && "Return value equals to non allowed value");
-    }
+    assert(bpf_assert_return);
+    
+    bool bpf_assert_not_return = !expected_not_returns[return_value];
+    assert(bpf_assert_not_return);
+   
     constants_buffer_ptr = 0;
     for (int i = 0; i < constants; i++) {
-        bool unchanged = !memcmp(constants_pointer[i], constants_buffer + constants_buffer_ptr, constants_size[i]);
-        assert(unchanged && "Constant value changed");
+        bool constant_unchanged = !memcmp(constants_pointer[i], constants_buffer + constants_buffer_ptr, constants_size[i]);
+        assert(constant_unchanged);
         constants_buffer_ptr += constants_size[i];
     }
     for (int i = 0; i < leads_to; i++) {
@@ -150,5 +152,5 @@ void _run_unrestricted_asserts(enum xdp_action return_value) {
 #define BPF_ASSERT_IF_ACTION_THEN_NEQ(return_value, target, type, value) {}
 #define BPF_ASSERT_IF_THEN_EQ(condition, target, type, value) {}
 #define BPF_ASSERT_IF_THEN_NEQ(condition, target, type, value) {}
-#define BPF_RETURN(return_value) (return return_value)
+#define BPF_RETURN(return_value) return return_value
 #endif

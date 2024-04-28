@@ -66,6 +66,8 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 SEC("xdp_fw")
 int xdp_fw_prog(struct xdp_md *ctx)
 {
+	BPF_ASSERT_NOT_RETURN(XDP_PASS);
+	BPF_ASSERT_NOT_RETURN(XDP_TX);
 	void* data_end = (void*)(long)ctx->data_end;
 	void* data         = (void*)(long)ctx->data;
 	
@@ -102,8 +104,12 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	
 	ip = data + nh_off;
 	nh_off +=sizeof(*ip);
-	if (data + nh_off  > data_end)
+	if (data + nh_off  > data_end) {
+		BPF_ASSERT_NOT_TRAVERSED();
 		goto EOP;
+	}
+
+	BPF_ASSERT_LEADS_TO_ACTION(ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP, XDP_DROP);
 
 	if(ip->protocol == IPPROTO_TCP){
 			VIGOR_TAG(TRAFFIC_CLASS, TCP);
@@ -113,16 +119,19 @@ int xdp_fw_prog(struct xdp_md *ctx)
 			VIGOR_TAG(TRAFFIC_CLASS, UDP);
 			goto L4;
 	}
+	BPF_ASSERT_RETURN(XDP_DROP);
 	goto EOP;
 
-	BPF_ASSERT("IP protocol is TCP or UDP", ip->protocol == IPPROTO_TCP || ip->protocol == IPPROTO_UDP);
 	
 	L4:
+	BPF_ASSERT("IP protocol is TCP or UDP", ip->protocol == IPPROTO_TCP || ip->protocol == IPPROTO_UDP);
 	bpf_debug("I'm l4\n");
 	l4 = data + nh_off;
 	nh_off +=sizeof(*l4);
-	if (data + nh_off  > data_end)
+	if (data + nh_off  > data_end) {
+		BPF_ASSERT_NOT_TRAVERSED();
 		goto EOP;
+	}
 
 	bpf_debug("extracting flow key ... \n");
 	/* flow key */
@@ -133,39 +142,43 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	flow_key.l4_dst = l4->dest;
 
 	biflow(&flow_key);
+	BPF_ASSERT_CONSTANT(&flow_key, sizeof(struct flow_ctx_table_key));
 
 	new_flow.in_port = B_PORT;
 	new_flow.out_port = A_PORT;
+	BPF_ASSERT_CONSTANT(&flow_key, sizeof(struct flow_ctx_table_leaf));
+
 
 	if (ingress_ifindex == B_PORT){
+		BPF_ASSERT("Ingress port is B_PORT", ctx->ingress_ifindex == B_PORT);
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
+		BPF_ASSERT_LEADS_TO_ACTION(!flow_leaf, XDP_DROP);
 			
 		if (flow_leaf) {
+			BPF_ASSERT_NOT_RETURN(XDP_DROP);
 			char* out_port = "out_port";
 			VIGOR_TAG(out_port, flow_leaf->out_port);
 			long rvalue = bpf_redirect_map(&tx_port, flow_leaf->out_port, 0);
-			BPF_ASSERT("", ctx->ingress_ifindex == B_PORT);
-			BPF_ASSERT_MAP_CONTAINS(&flow_ctx_table, &flow_key);
-			return rvalue;
+			BPF_RETURN(rvalue);
 		} else {
-			BPF_ASSERT("", ctx->ingress_ifindex == B_PORT);
-			BPF_ASSERT_MAP_NOT_CONTAINS(&flow_ctx_table, &flow_key);
-			return XDP_DROP;
+			BPF_RETURN(XDP_DROP);
 		}
 	} else {
+		BPF_ASSERT("", ingress_ifindex != B_PORT);
+		BPF_ASSERT_NOT_RETURN(XDP_DROP);
+
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
-			
+		
 		if (!flow_leaf){
 			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		
-		BPF_ASSERT("", ingress_ifindex != B_PORT);
-		return bpf_redirect_map(&tx_port, B_PORT, 0);
+		BPF_RETURN(bpf_redirect_map(&tx_port, B_PORT, 0));
 	}
 
 
 EOP:
-	return XDP_DROP;
+	BPF_RETURN(XDP_DROP);
 
 }
 
