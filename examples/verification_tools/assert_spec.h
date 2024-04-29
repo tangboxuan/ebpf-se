@@ -11,11 +11,12 @@ int expected_return = -1;
 bool expected_not_returns[XDP_REDIRECT+1] = { false };
 
 #define MAX_CONSTANTS 10
+#define CONSTANTS_BUFFER_SIZE 80000
 int constants = 0;
 void* constants_pointer[MAX_CONSTANTS];
 size_t constants_size[MAX_CONSTANTS];
 int constants_buffer_ptr = 0;
-char constants_buffer[MAX_CONSTANTS * 8];
+char constants_buffer[CONSTANTS_BUFFER_SIZE];
 
 #define MAX_LEADS_TO_ACTION 10
 int leads_to = 0;
@@ -51,6 +52,8 @@ void _set_expected_not_return(value) {
 
 void _add_constant(void* ptr, size_t len) {
     assert(constants < MAX_CONSTANTS && "Increase MAX_CONSTANTS");
+    bool out_of_memory = (constants_buffer_ptr + len) <= CONSTANTS_BUFFER_SIZE;
+    assert(out_of_memory && "Increase CONSTANTS_BUFFER_SIZE");
     constants_pointer[constants] = ptr;
     constants_size[constants] = len;
     memcpy(constants_buffer + constants_buffer_ptr, ptr, len);
@@ -140,6 +143,16 @@ void _run_unrestricted_asserts(enum xdp_action return_value) {
 }
 #define BPF_ASSERT_IF_THEN_EQ(condition, target, type, value) _BPF_ASSERT_IF_THEN(condition, target, type, value, true)
 #define BPF_ASSERT_IF_THEN_NEQ(condition, target, type, value) _BPF_ASSERT_IF_THEN(condition, target, type, value, false)
+#define BPF_ASSERT_END_EQ(target, type, value) _BPF_ASSERT_IF_THEN(true, target, type, value, true)
+#define BPF_ASSERT_END_NEQ(target, type, value) _BPF_ASSERT_IF_THEN(true, target, type, value, false)
+#define _BPF_ASSERT_IF_THEN_ADDR(condition, target, addr, size, eq_bool) {\
+    if (condition) {\
+        void* expected = malloc(size);\
+        memcpy(expected, addr, size);\
+        _add_if(target, expected, size, eq_bool);\
+    }\
+}
+#define BPF_ASSERT_END_EQ_ADDR(target, addr, size) _BPF_ASSERT_IF_THEN_ADDR(true, target, addr, size, true)
 #define BPF_RETURN(return_value) {_run_unrestricted_asserts(return_value); return return_value;}
 #else
 #define BPF_ASSERT(msg, x) {}
@@ -152,5 +165,8 @@ void _run_unrestricted_asserts(enum xdp_action return_value) {
 #define BPF_ASSERT_IF_ACTION_THEN_NEQ(return_value, target, type, value) {}
 #define BPF_ASSERT_IF_THEN_EQ(condition, target, type, value) {}
 #define BPF_ASSERT_IF_THEN_NEQ(condition, target, type, value) {}
+#define BPF_ASSERT_END_EQ(target, type, value) {}
+#define BPF_ASSERT_END_EQ_ADDR(target, addr, size) {}
+#define BPF_ASSERT_END_NEQ(target, type, value) {}
 #define BPF_RETURN(return_value) return return_value
 #endif

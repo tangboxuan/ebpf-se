@@ -2,6 +2,5 @@
 
 include ../Makefile
 
-XDP_TARGETS := test
-XDP_SECTION := xdp
-XDP_FUNCTION := xdp_main
+XDP_TARGETS := lb_kern
+XDP_FUNCTION := xdp_prog_simple

@@ -35,34 +35,46 @@
 
 #include "xdp_map.h"
 
+#include "../verification_tools/assert_spec.h"
+
 SEC("xdp")
 int xdp_prog(struct xdp_md *ctx)
 {
+    BPF_ASSERT_RETURN(XDP_PASS);
+
     void *data_end = (void *)(long)ctx->data_end;
     void *data = (void *)(long)ctx->data;
     // __u32 probe_key = XDP_PASS;
     struct ethhdr *eth = data;
+    BPF_ASSERT_CONSTANT(eth, sizeof(struct ethhdr));
 
     if ((void *)(eth + 1) > data_end)
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
 
     if (eth->h_proto != bpf_htons(ETH_P_IPV6))
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
 
     struct ipv6hdr *ipv6 = (void *)(eth + 1);
+    BPF_ASSERT_CONSTANT(ipv6, sizeof(struct ipv6hdr));
     if ((void *)(ipv6 + 1) > data_end)
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
 
     // is srv6
     if (ipv6->nexthdr != IPPROTO_IPV6ROUTE)
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
+
 
     struct srhhdr *srh = (void *)(ipv6 + 1);
+    BPF_ASSERT_CONSTANT(srh, sizeof(struct srhhdr));
     if ((void *)(srh + 1) > data_end)
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
 
     if (srh->routingType != IPV6_SRCRT_TYPE_4) // IPV6_SRCRT_TYPE_4 = SRH
-        return XDP_PASS;
+        BPF_RETURN(XDP_PASS);
+
+    BPF_ASSERT("", eth->h_proto == bpf_htons(ETH_P_IPV6) &&\
+                   ipv6->nexthdr == IPPROTO_IPV6ROUTE &&\
+                   srh->routingType == IPV6_SRCRT_TYPE_4);
 
     struct probe_data key = {};
     __u64 zero = 0, *value;
@@ -91,17 +103,19 @@ int xdp_prog(struct xdp_md *ctx)
         __builtin_memcpy(&key.segments[i], &srh->segments[i], sizeof(struct in6_addr));
     }
 
+    BPF_ASSERT_CONSTANT(&key, sizeof(struct probe_data));
+
     value = bpf_map_lookup_elem(&ipfix_probe_map, &key);
     if (!value)
     {
         bpf_map_update_elem(&ipfix_probe_map, &key, &zero, BPF_NOEXIST);
         value = bpf_map_lookup_elem(&ipfix_probe_map, &key);
         if (!value)
-            return XDP_PASS;
+            BPF_RETURN(XDP_PASS);
     }
     (*value)++;
 
-    return XDP_PASS;
+    BPF_RETURN(XDP_PASS);
 }
 
 /** Symbex driver starts here **/

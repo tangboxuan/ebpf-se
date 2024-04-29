@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <linux/bpf.h>
-#include <klee/klee.h>
+#include <stdint.h>
 
 #ifndef VERIFICAION_HELPERS
 #define VERIFICAION_HELPERS
@@ -17,7 +17,10 @@ uint32_t ipv4_uint8_to_uint32(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     result += d;
     return result;
 }
+#endif
 
+#ifdef KLEE_VERIFICATION
+#include <klee/klee.h>
 void* create_packet(size_t pkt_size) {
 	void *packet = malloc(pkt_size);
 	klee_make_symbolic(packet, pkt_size, "packet");
@@ -29,6 +32,9 @@ struct xdp_md* create_ctx(void* packet, size_t packet_size, size_t eth_offset) {
     klee_make_symbolic(ctx, sizeof(struct xdp_md), "ctx");
 	ctx->data = (long)packet + eth_offset;
 	ctx->data_end = (long)packet + packet_size;
+    ctx->data_meta = 0;
+    ctx->ingress_ifindex = 0;
+    ctx->rx_queue_index = 0;
     return (struct xdp_md*)ctx;
 }
 #endif
