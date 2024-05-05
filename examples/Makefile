@@ -130,8 +130,21 @@ viewer:
 		-o $(COMMON_DIR)/ktest_viewer
 
 replay:
-	@F=$(shell printf "%06d" $f); \
-	$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
-	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; #echo Return Value: $$?
+	@F=`printf "%06d" $f`; \
+	#$(COMMON_DIR)/ktest_viewer klee-last/test$$F.ktest; \
+	KTEST_FILE=klee-last/test$$F.ktest ./replayer ; echo $$?
 
 assert: clean-klee xdp-target symbex
+
+assert-partial:
+	@n=`awk '/generated tests/ {print $$NF}' 'klee-last/info'`; \
+	i=1; while [ $$i -le $$n ]; do\
+		F=`printf "%06d" $$i`; \
+		KTEST_FILE=klee-last/test$$F.ktest ./replayer ;\
+		if [ $$? = 1 ]; then\
+		echo Return value of 1; \
+		else \
+		echo Return value not 1; \
+		fi ;\
+		i=`echo $$i + 1 | bc`;\
+	done
