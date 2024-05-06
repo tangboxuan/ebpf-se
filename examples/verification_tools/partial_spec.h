@@ -51,15 +51,17 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
-    // Run the program
-	struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx, eth_offset);
-
     // Run the spec
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy, eth_offset);
 
-    if (spec_end_state.rvalue != XDP_ANY && spec_end_state.rvalue != XDP_ANY_IGNORE_STATE)
-        check_return_value(&prog_end_state, &spec_end_state);
+    if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
+        // Run the program
+        struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx, eth_offset);
 
-    if (spec_end_state.rvalue <= XDP_ANY)
-        check_packet(&prog_end_state, &spec_end_state, packet_size);
+        if (spec_end_state.rvalue != XDP_ANY && spec_end_state.rvalue != XDP_ANY_IGNORE_STATE)
+            check_return_value(&prog_end_state, &spec_end_state);
+
+        if (spec_end_state.rvalue <= XDP_ANY)
+            check_packet(&prog_end_state, &spec_end_state, packet_size);
+    }
 }

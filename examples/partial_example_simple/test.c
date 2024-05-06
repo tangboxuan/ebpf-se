@@ -35,27 +35,24 @@ struct bpf_map_def SEC("maps") example_table = {
 
 SEC("xdp")
 int f(int x, int y) {
-	if (x%2==0) {
+	if (x%2==0) { 
 		if (y%2==0) {
-			return 1;
+			return 1; //
 		}
-		return 0;
+		return 0; // 
 	}
 	return 0;
-}
+} 
 
+int f_spec(int x, int y) {
+	if (x==6) {
+		return 1; 
+	}
+	return -1;
+}
 
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
-int f_spec(int x, int y) {
-	if (x==6) {
-		if (y==6) {
-			return 1;
-		}
-			return XDP_ANY;
-	}
-	return XDP_ANY;
-}
 
 int main() {
 	int x;

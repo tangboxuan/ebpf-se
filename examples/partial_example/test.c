@@ -92,10 +92,10 @@ int xdp_spec(struct xdp_md *ctx) {
 	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
 
 	if (payload[0] == '\0') {
-		if (payload[1] == '\0') {
-			return XDP_PASS_IGNORE_STATE;
-		}
-		return XDP_TX;
+		// if (payload[1] == '\0') {
+		// 	return XDP_PASS_IGNORE_STATE;
+		// }
+		return XDP_ANY_IGNORE_STATE;
 	}
 
 	return XDP_ANY;
