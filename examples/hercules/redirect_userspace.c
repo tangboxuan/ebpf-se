@@ -32,7 +32,7 @@
 #include "hercules.h"
 
 #include <bpf/bpf_helpers.h>
-
+#include "../verification_tools/weak_partial_spec.h"
 
 struct bpf_map_def SEC("maps") xsks_map = {
 		.type        = BPF_MAP_TYPE_XSKMAP,
@@ -71,66 +71,66 @@ int xdp_prog_redirect_userspace(struct xdp_md *ctx)
 	                sizeof(struct udphdr);
 	if(data + offset > data_end) {
 		VIGOR_TAG(REACHED_STATE, TOO_FEW_HEADERS); // NOT REACHED
-		return XDP_PASS; // too short
+		BPF_RETURN(XDP_PASS); // too short
 	}
 	const struct ether_header *eh = (const struct ether_header *)data;
 	if(eh->ether_type != htons(ETHERTYPE_IP)) {
 		VIGOR_TAG(REACHED_STATE, NOT_IP);
-		return XDP_PASS; // not IP
+		BPF_RETURN(XDP_PASS); // not IP
 	}
 	const struct iphdr *iph = (const struct iphdr *)(eh + 1);
 	if(iph->protocol != IPPROTO_UDP) {
 		VIGOR_TAG(REACHED_STATE, NOT_UDP_1);
-		return XDP_PASS; // not UDP
+		BPF_RETURN(XDP_PASS); // not UDP
 	}
 
 	// get listening address
 	struct hercules_app_addr *addr = bpf_map_lookup_elem(&local_addr, &zero);
 	if(addr == NULL) {
 		VIGOR_TAG(REACHED_STATE, NO_LISTENER_ADDRESS); // NOT REACHED
-		return XDP_PASS; // not listening
+		BPF_RETURN(XDP_PASS); // not listening
 	}
 
 	// check if IP address matches
 	if(iph->daddr != addr->ip) {
 		VIGOR_TAG(REACHED_STATE, WRONG_IP);
-		return XDP_PASS; // not addressed to us (IP address)
+		BPF_RETURN(XDP_PASS); // not addressed to us (IP address)
 	}
 
 	// check if UDP port matches
 	const struct udphdr *udph = (const struct udphdr *)(iph + 1);
 	if(udph->uh_dport != htons(SCION_ENDHOST_PORT)) {
 		VIGOR_TAG(REACHED_STATE, WRONG_UDP_PORT);
-		return XDP_PASS; // not addressed to us (UDP port)
+		BPF_RETURN(XDP_PASS); // not addressed to us (UDP port)
 	}
 
 	// parse SCION header
 	const struct scionhdr *scionh = (const struct scionhdr *)(udph + 1);
 	if(scionh->version != 0u) {
 		VIGOR_TAG(REACHED_STATE, UNSUPPORTED_SCION);
-		return XDP_PASS; // unsupported SCION version
+		BPF_RETURN(XDP_PASS); // unsupported SCION version
 	}
 	if(scionh->dst_type != 0u) {
 		VIGOR_TAG(REACHED_STATE, UNSUPPORTED_DST_ADDRESS);
-		return XDP_PASS; // unsupported destination address type
+		BPF_RETURN(XDP_PASS); // unsupported destination address type
 	}
 	if(scionh->src_type != 0u) {
 		VIGOR_TAG(REACHED_STATE, UNSUPPORTED_SRC_ADDRESS);
-		return XDP_PASS; // unsupported source address type
+		BPF_RETURN(XDP_PASS); // unsupported source address type
 	}
 	if(scionh->next_header != IPPROTO_UDP) {
 		VIGOR_TAG(REACHED_STATE, NOT_UDP);
-		return XDP_PASS;
+		BPF_RETURN(XDP_PASS);
 	}
 
 	const struct scionaddrhdr_ipv4 *scionaddrh = (const struct scionaddrhdr_ipv4 *)(scionh + 1);
 	if(scionaddrh->dst_ia != addr->ia) {
 		VIGOR_TAG(REACHED_STATE, WRONG_SCION_DEST);
-		return XDP_PASS; // not addressed to us (IA)
+		BPF_RETURN(XDP_PASS); // not addressed to us (IA)
 	}
 	if(scionaddrh->dst_ip != addr->ip) {
 		VIGOR_TAG(REACHED_STATE, WRONG_SCION_DEST2);
-		return XDP_PASS; // not addressed to us (IP in SCION hdr)
+		BPF_RETURN(XDP_PASS); // not addressed to us (IP in SCION hdr)
 	}
 	offset += scionh->header_len * SCION_HEADER_LINELEN - // Header length is in lineLen of SCION_HEADER_LINELEN bytes
 	          sizeof(struct scionhdr) -
@@ -140,11 +140,11 @@ int xdp_prog_redirect_userspace(struct xdp_md *ctx)
 	const struct udphdr *l4udph = ((void *)scionh) + scionh->header_len * SCION_HEADER_LINELEN;
 	if((void *)(l4udph + 1) > data_end) {
 		VIGOR_TAG(REACHED_STATE, TOO_SHORT); // NOT REACHED
-		return XDP_PASS; // too short after all
+		BPF_RETURN(XDP_PASS); // too short after all
 	}
 	if(l4udph->dest != addr->port) {
 		VIGOR_TAG(REACHED_STATE, WRONG_UDP_DEST);
-		return XDP_PASS;
+		BPF_RETURN(XDP_PASS);
 	}
 
 	// write the payload offset to the first word, so that the user space program can continue from there.
@@ -153,17 +153,25 @@ int xdp_prog_redirect_userspace(struct xdp_md *ctx)
 	__u32 *_num_xsks = bpf_map_lookup_elem(&num_xsks, &zero);
 	if(_num_xsks == NULL) {
 		VIGOR_TAG(REACHED_STATE, NO_NUM_XSK); // NOT REACHED
-		return XDP_PASS;
+		BPF_RETURN(XDP_PASS);
 	}
 	__sync_fetch_and_add(&redirect_count, 1);
 
-	return bpf_redirect_map(&xsks_map, (redirect_count) % (*_num_xsks),
-	                        0); // XXX distribute across multiple sockets, once available
+	BPF_RETURN(bpf_redirect_map(&xsks_map, (redirect_count) % (*_num_xsks),
+	                        0)); // XXX distribute across multiple sockets, once available
 }
 
 /** Symbex driver starts here **/
 
 #ifdef KLEE_VERIFICATION
+#include "../verification_tools/parsing_helpers_spec.h"
+int spec(struct xdp_md* ctx) {
+	const struct udphdr *udph = (struct udphdr *)get_tcp_udp(ctx);
+	if(udph->uh_dport != htons(SCION_ENDHOST_PORT)) {
+		return XDP_PASS; // not addressed to us (UDP port)
+	}
+	return XDP_ANY_IGNORE_STATE;
+}
 
 struct __attribute__((__packed__)) pkt {
   struct ethhdr ether;
@@ -194,9 +202,10 @@ int main(int argc, char **argv) {
   test.rx_queue_index = 0;
 
   bpf_begin();
-  if (xdp_prog_redirect_userspace(&test))
-    return 1;
-  return 0;
+  functional_verify_weak(xdp_prog_redirect_userspace, spec, &test, sizeof(struct pkt), 0);
+//   if (xdp_prog_redirect_userspace(&test))
+//     return 1;
+//   return 0;
 }
 
 #endif // KLEE_VERIFICATION

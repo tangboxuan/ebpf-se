@@ -38,6 +38,21 @@ struct __attribute__((__packed__)) katran_pkt_icmp_v6 {
 
 enum PacketTypes {NON_IP,IPV4,IPV6,FRAGV4,FRAGV6,ICMPV4,ICMPV6};
 
+size_t get_packet_size(enum PacketTypes type) {
+  if(type == IPV4 || type == FRAGV4 || type == NON_IP) return sizeof(struct katran_pkt);
+  if(type == ICMPV4) return sizeof(struct katran_pkt_icmp);
+  if (type == IPV6 || type == FRAGV6) return sizeof(struct katran_pkt_v6);
+  if (type == ICMPV6) return sizeof(struct katran_pkt_icmp_v6);
+  assert(0);
+}
+
+size_t get_eth_offset(enum PacketTypes type) {
+  if(type == IPV4 || type == FRAGV4 || type == NON_IP) return sizeof(struct iphdr);
+  if(type == ICMPV4) return sizeof(struct iphdr);
+  if (type == IPV6 || type == FRAGV6) return sizeof(struct ipv6hdr);
+  if (type == ICMPV6) return sizeof(struct ipv6hdr);
+}
+
 void get_packet(enum PacketTypes type, struct xdp_md* ctx){
 
   if(type == IPV4 || type == FRAGV4 || type == NON_IP){
@@ -92,7 +107,7 @@ void get_packet(enum PacketTypes type, struct xdp_md* ctx){
     ctx->data_end = (long)(pkt + 1);
   }
   else{
-    assert(0);
+    assert(false);
   }
 
 }

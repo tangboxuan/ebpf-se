@@ -1,9 +1,28 @@
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
+#include <bpf/bpf_endian.h>
 #include <linux/ip.h>
 #include "../common/parsing_helpers.h"
 
-struct ethhdr* get_eth(struct xdp_md *ctx) {
+// #define VLAN_MAX_DEPTH 4
+
+// /*
+//  *	struct vlan_hdr - vlan header
+//  *	@h_vlan_TCI: priority and VLAN ID
+//  *	@h_vlan_encapsulated_proto: packet type ID or len
+//  */
+// struct vlan_hdr {
+// 	__be16	h_vlan_TCI;
+// 	__be16	h_vlan_encapsulated_proto;
+// };
+
+// static __always_inline int proto_is_vlan(__u16 h_proto)
+// {
+// 	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
+// 		  h_proto == bpf_htons(ETH_P_8021AD));
+// }
+
+void* get_eth(struct xdp_md *ctx) {
     return (struct ethhdr*)(long)(ctx->data);
 }
 
@@ -22,7 +41,7 @@ int get_eth_proto(struct xdp_md *ctx) {
     return h_proto;
 }
 
-struct iphdr* get_ip(struct xdp_md *ctx) {
+void* get_ip(struct xdp_md *ctx) {
     struct ethhdr *eth = get_eth(ctx);
     struct vlan_hdr *vlh = (struct vlan_hdr *)(eth+1);
     __u16 h_proto = eth->h_proto;

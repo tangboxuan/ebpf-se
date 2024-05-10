@@ -10,6 +10,7 @@
 #endif
 
 #include <bpf/bpf_helpers.h>
+#include "../verification_tools/weak_partial_spec.h"
 
 struct __attribute__((__packed__)) pkt {
   struct ethhdr ether;
@@ -54,7 +55,7 @@ int xdp_main(struct xdp_md *ctx) {
 		goto EOP;
 
 	if(ip->protocol != IPPROTO_TCP){
-		return XDP_PASS;
+		BPF_RETURN(XDP_PASS);
 	}
 
 	tcp = data + nh_off;
@@ -70,32 +71,33 @@ int xdp_main(struct xdp_md *ctx) {
 	if (payload[0] == '\0') {
 		if (payload[1] == '\0') {
 			payload[2] = '\0';
-			return XDP_PASS;
+			BPF_RETURN(XDP_PASS);
 		}
-		return XDP_TX;
+		BPF_RETURN(XDP_TX);
 	}
 
-	return XDP_PASS;
+	BPF_RETURN(XDP_PASS);
 	EOP:
-		return XDP_DROP;
+		BPF_RETURN(XDP_DROP);
+
+	END_BPF();
 }
 
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
 #include <stdlib.h>
-#include "../verification_tools/partial_spec.h"
 int xdp_spec(struct xdp_md *ctx) {
 	struct pkt *packet = (void *)(long)(ctx->data);
 	struct iphdr *ip = (void*)&(packet->ipv4);
 	char *payload = (void *)&(packet->payload);
 
-	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
+	// if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
 
 	if (payload[0] == '\0') {
-		// if (payload[1] == '\0') {
-		// 	return XDP_PASS_IGNORE_STATE;
-		// }
-		return XDP_ANY_IGNORE_STATE;
+		if (payload[1] == '\0') {
+			return XDP_DROP_IGNORE_STATE;
+		}
+		return XDP_TX;
 	}
 
 	return XDP_ANY;
@@ -105,7 +107,7 @@ int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
 	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
 
-	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0);
+	functional_verify_weak(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0);
 	return 0;
 }
 #endif

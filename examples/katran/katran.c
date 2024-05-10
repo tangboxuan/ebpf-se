@@ -27,6 +27,24 @@
 #endif
 
 #include "katran_pkts.h"
+#include "../verification_tools/partial_spec.h"
+#include "../verification_tools/parsing_helpers_spec.h"
+int spec(struct xdp_md* ctx) {
+  struct eth_hdr *eth = get_eth(ctx);
+  if (eth->eth_proto == BE_ETH_P_IP) {
+    struct iphdr *iph = (struct iphdr*)(eth+1);
+    if (iph->frag_off & PCKT_FRAGMENTED) {
+      return XDP_DROP;
+    }
+    if (iph->protocol == IPPROTO_ICMP) {
+      struct icmphdr *icmp = (struct icmphdr*)(iph+1);
+      if (icmp->type == ICMP_ECHO) {
+        return XDP_TX_IGNORE_STATE;
+      }
+    }
+  }
+  return XDP_ANY_IGNORE_STATE;
+}
 
 int main(int argc, char** argv){
   BPF_TIME_INIT();
@@ -52,34 +70,55 @@ int main(int argc, char** argv){
   #endif
 
   struct xdp_md test;
+  // get_packet(IPV4,&test);
+  // klee_print_expr("done creating packet", 0);
+  enum PacketTypes type;
+
   if(klee_int("pkt.isIPv4")){
     if(klee_int("pkt.is_fragmented"))
-      get_packet(FRAGV4,&test);
+      type = FRAGV4;
+      // get_packet(FRAGV4,&test);
     else if(klee_int("pkt.isICMP"))
-      get_packet(ICMPV4,&test);
+      type = ICMPV4;
+      // get_packet(ICMPV4,&test);
     else
-      get_packet(IPV4,&test);
+      type = IPV4;
+      // get_packet(IPV4,&test);
   }
   else if(klee_int("pkt.isIPv6")) {
     // ipv6
     if(klee_int("pkt.is_fragmented"))
-      get_packet(FRAGV6,&test);
+      type = FRAGV6;
+      // get_packet(FRAGV6,&test);
     else if(klee_int("pkt.isICMP"))
-      get_packet(ICMPV6,&test); 
+      type = ICMPV6;
+      // get_packet(ICMPV6,&test); 
     else
-      get_packet(IPV6,&test);
+      type = IPV6;
+      // get_packet(IPV6,&test);
   }
   else{
-    get_packet(NON_IP,&test);
+    type = NON_IP;
+    // get_packet(NON_IP,&test);
   }
+
+  get_packet(type, &test);
 
   test.data_meta = 0;
   test.ingress_ifindex = 0;
   test.rx_queue_index = 0;
 
   bpf_begin();
-  if (balancer_ingress(&test))
-    return 1;
-  return 0;
+
+  klee_print_expr("type", type);
+  klee_print_expr("packet_size", get_packet_size(type));
+
+  functional_verify(balancer_ingress, spec, &test, get_packet_size(type), get_eth_offset(type));
+
+  // if (balancer_ingress(&test))
+  //   return 1;
+  // return 0;
 }
 
+// 16110 paths
+// 11:50.61

@@ -36,17 +36,17 @@ struct bpf_map_def SEC("maps") example_table = {
 SEC("xdp")
 int f(int x, int y) {
 	if (x%2==0) { 
-		if (y%2==0) {
-			return 1; //
-		}
-		return 0; // 
+		return 1; // 
+	}
+	if (y%2==0) {
+		return 2; //
 	}
 	return 0;
 } 
 
 int f_spec(int x, int y) {
-	if (x==6) {
-		return 1; 
+	if (y==6) {
+		return 2; 
 	}
 	return -1;
 }
@@ -59,6 +59,10 @@ int main() {
 	klee_make_symbolic(&x, sizeof(int), "x");
 	int y;
 	klee_make_symbolic(&y, sizeof(int), "y");
-	return partial_verify(f, f_spec, x, y);
+	int a = f(x,y);
+	int b = f_spec(x,y);
+	if (b != -1) {
+		assert(a==b);
+	}
 }
 #endif
