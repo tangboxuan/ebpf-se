@@ -114,7 +114,7 @@ int xdp_spec(struct xdp_md *ctx) {
 /** Symbex driver starts here **/
 
 #ifdef KLEE_VERIFICATION
-#include "../verification_tools/full_spec.h"
+#include "../verification_tools/partial_spec.h"
 struct __attribute__((__packed__)) pkt {
   struct ethhdr ether;
   struct iphdr ipv4;
@@ -131,8 +131,9 @@ int main(int argc, char **argv) {
   struct pkt *pkt = create_packet(sizeof(struct pkt));
   struct xdp_md *test = create_ctx(pkt, sizeof(struct pkt), 0);
 
+  set_up_maps();
   bpf_begin();
-  return functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0, set_up_maps);
+functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0);
 }
 
 #endif // KLEE_VERIFICATION

@@ -1,7 +1,7 @@
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <bpf/bpf_endian.h>
-#include <linux/ip.h>
+// #include <linux/ip.h>
 #include "../common/parsing_helpers.h"
 
 // #define VLAN_MAX_DEPTH 4

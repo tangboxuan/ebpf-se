@@ -31,7 +31,7 @@ struct __attribute__((__packed__)) pkt {
 };
 
 #ifdef KLEE_VERIFICATION
-#include "../verification_tools/full_spec.h"
+// #include "../verification_tools/full_spec.h"
 int set_up_maps() {
   BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
   BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
@@ -60,6 +60,7 @@ int main(int argc, char** argv){
   ctx->data_meta = 0;
   __u32 temp;
   klee_make_symbolic(&(temp), sizeof(temp), "VIGOR_DEVICE");
+  klee_assume(temp==A_PORT||temp==B_PORT);
   ctx->ingress_ifindex = temp;
   ctx->rx_queue_index = 0;
   

@@ -357,7 +357,7 @@ OUT:
 
 
 #include "klee/klee.h"
-#include "../verification_tools/verify.h"
+#include "../verification_tools/partial_spec.h"
 
 int set_up_maps() {
   const __u32 num_targets = 3;
