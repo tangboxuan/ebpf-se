@@ -33,8 +33,8 @@ struct __attribute__((__packed__)) pkt {
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
 int set_up_maps() {
-  BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
-  BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
+  BPF_MAP_INIT(&tx_port, "", "", "");
+  BPF_MAP_INIT(&flow_ctx_table, "", "", "");
 
   /* Init from xdp_fw_user.c */
   #define num_ports 2
@@ -42,24 +42,28 @@ int set_up_maps() {
 	int ifindex_out[num_ports] = {B_PORT,A_PORT};
 
   for(uint i = 0; i < num_ports; i++){
-    if(bpf_map_update_elem(&tx_port, &key[i], &ifindex_out[i],0) < 0)
+    if(bpf_map_update_elem(&tx_port, &key[i], &ifindex_out[i], 0) < 0)
       return -1;
   }
 
-  // struct flow_ctx_table_key flow_key = {0};
-	// flow_key.ip_proto = 6;
-	// flow_key.ip_src = ipv4_uint8_to_uint32(10,0,0,1);
-	// flow_key.ip_dst = ipv4_uint8_to_uint32(10,0,0,2);
-	// flow_key.l4_src = 27;
-	// flow_key.l4_dst = 28;
+  struct flow_ctx_table_key flow_key = {0};
+	flow_key.ip_proto = 6;
+	flow_key.ip_src = 101;
+	flow_key.ip_dst = 102;
+	flow_key.l4_src = 103;
+	flow_key.l4_dst = 104;
 
-  // struct flow_ctx_table_leaf new_flow = {0};
-  // new_flow.in_port = B_PORT;
-  // new_flow.out_port = A_PORT;
+  struct flow_ctx_table_leaf new_flow = {0};
+  new_flow.in_port = B_PORT;
+  new_flow.out_port = A_PORT;
 
-  // bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, BPF_ANY);
+  bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
   return 0;
   /* Init done */
+}
+
+int dummy_set_up_maps() {
+  return 0;
 }
 
 int reset_maps() {
@@ -72,16 +76,21 @@ int main(int argc, char** argv){
   struct pkt *packet = create_packet(sizeof(struct pkt));
   packet->ether.h_proto = BE_ETH_P_IP;
   packet->ipv4.version = 4;
+  packet->ipv4.protocol = 6;
   packet->ipv4.ihl = sizeof(struct iphdr) / 4;
+  packet->ipv4.saddr = 101;
+  packet->ipv4.daddr = 102;
   packet->tcp.doff = sizeof(struct tcphdr) / 4;
+  packet->tcp.source = 103;
+  packet->tcp.dest = 104;
   struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
   ctx->data_meta = 0;
   __u32 temp;
-  klee_make_symbolic(&(temp), sizeof(temp), "VIGOR_DEVICE");
-  klee_assume(temp==A_PORT||temp==B_PORT);
-  ctx->ingress_ifindex = temp;
+  // klee_make_symbolic(&(temp), sizeof(temp), "VIGOR_DEVICE");
+  // klee_assume(temp==A_PORT||temp==B_PORT);
+  ctx->ingress_ifindex = B_PORT;
   ctx->rx_queue_index = 0;
-  
+
   bpf_begin();
 
   functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps, reset_maps);

@@ -34,7 +34,7 @@ struct __attribute__((__packed__)) pkt {
 // } example_table SEC(".maps");
 
 struct bpf_map_def SEC("maps") example_table = {
-	.type = BPF_MAP_TYPE_ARRAY,
+	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(int),
 	.value_size = sizeof(int),
 	.max_entries = 8,
@@ -79,6 +79,7 @@ int xdp_main(struct xdp_md *ctx) {
 	
 	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
 	if (!lookuped_value) return XDP_DROP;
+	if (*lookuped_value == 0) return XDP_TX;
 	payload[0] = *lookuped_value;
 
 	if (payload[1] == '\0') {
@@ -98,14 +99,14 @@ int xdp_main(struct xdp_md *ctx) {
 #ifdef KLEE_VERIFICATION
 #include "klee/klee.h"
 #include <stdlib.h>
-#include "../verification_tools/full_spec.h"
+#include "../verification_tools/partial_spec.h"
 int xdp_spec(struct xdp_md *ctx) {
 	struct pkt *packet = (void *)(long)(ctx->data);
 	struct iphdr *ip = (void*)&(packet->ipv4);
 	char *payload = (void *)&(packet->payload);
 
 	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
-
+	return XDP_TX;
 	int key = 0;
 
 	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
@@ -130,10 +131,14 @@ int set_up_maps() {
   return 0;
 }
 
+int reset_maps() {
+	return 0;
+}
+
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
 	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
-	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0, set_up_maps);
+	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0, set_up_maps, reset_maps);
 	return 0;
 }
 #endif

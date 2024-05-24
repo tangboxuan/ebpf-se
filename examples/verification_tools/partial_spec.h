@@ -8,11 +8,15 @@
 
 #define BPF_RETURN(x) return x
 
+typedef int (*maps_func)(void);
+
 void functional_verify(xdp_func xdp_main, 
                       xdp_func xdp_spec, 
                       struct xdp_md *ctx,
                       size_t packet_size,
-					  size_t eth_offset) {
+					  size_t eth_offset,
+                      maps_func set_up_maps,
+                      maps_func reset_maps) {
     // Make a copy of packet
     void* packet = (void*)(long)ctx->data - eth_offset;
     void* packet_copy = malloc(packet_size);
@@ -26,10 +30,13 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
     // Run the spec
+    set_up_maps();
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
 
     if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
         // Run the program
+        reset_maps();
+        set_up_maps();
         struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx);
 
         if (spec_end_state.rvalue != XDP_ANY)
