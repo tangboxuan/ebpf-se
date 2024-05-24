@@ -95,6 +95,7 @@ int traced_variable_type(char *variable, char **type) {
 void bpf_begin(){ record_calls = 1;}
 
 void bpf_map_init_stub(struct bpf_map_def *map, char *name, char *key_type, char *val_type) {
+  assert(bpf_map_ctr < MAX_BPF_MAPS);
   map->map_id = bpf_map_ctr++;
   if (map->type == 2 | map->type == 6 | map->type == 14 || map->type == 16) {
     // Array, per-cpu Array, devmap, cpumap This should be in terms of the enum

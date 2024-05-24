@@ -8,19 +8,6 @@
 
 #define BPF_RETURN(x) return x
 
-
-#define MAX_NO_MAPS 10
-struct bpf_map_def* maps[MAX_NO_MAPS];
-size_t no_maps = 0;
-
-void __register_map(struct bpf_map_def* map) {
-    assert(no_maps < MAX_NO_MAPS && "Increase MAX_NO_MAPS");
-    maps[no_maps] = map;
-    no_maps++;
-}
-
-#define REGISTER_MAP(map) __register_map(map);
-
 typedef int (*maps_func)(void);
 
 void functional_verify(xdp_func xdp_main, 
@@ -41,17 +28,13 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
-    for (size_t no = 0; no < no_maps; no++) {
-        BPF_MAP_INIT(maps[no], "", "", "");
-    }
-    // Run the spec
     set_up_maps();
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
 
     if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
         // Run the program
-        for (size_t no = 0; no < no_maps; no++) {
-            BPF_MAP_RESET(maps[no]);
+        for (size_t no = 0; no < bpf_map_ctr; no++) {
+            BPF_MAP_RESET(bpf_map_stubs[no]);
         }
         set_up_maps();
         struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx);

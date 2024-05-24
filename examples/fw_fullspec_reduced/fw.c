@@ -80,8 +80,8 @@ int main(int argc, char** argv){
   ctx->ingress_ifindex = B_PORT;
   ctx->rx_queue_index = 0;
 
-  REGISTER_MAP(&tx_port);
-  REGISTER_MAP(&flow_ctx_table);
+  BPF_MAP_INIT(&tx_port, "", "", "");
+  BPF_MAP_INIT(&flow_ctx_table, "", "", "");
 
   bpf_begin();
 

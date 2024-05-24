@@ -68,6 +68,7 @@ struct MapStub {
   /* Storing keys, values */
   char* keys_present;   /* Array storing all keys map has seen */
   char* values_present; /* Value for each key */
+  unsigned int max_entries;
   unsigned int key_deleted[NUM_ELEMS]; /* 1 in nth position implies nth key has been
                                  deleted */
   unsigned int keys_cached[NUM_ELEMS]; /* 1 in nth position implies nth key is cached */
@@ -91,6 +92,7 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
   strcpy(map->val_type, val_type);
   map->key_size = key_size;
   map->value_size = value_size;
+  map->max_entries = max_entries;
   map->keys_seen = 0;
 
   map->keys_present = calloc(max_entries, key_size);
