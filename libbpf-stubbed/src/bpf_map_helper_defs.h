@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <malloc.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define NUM_ELEMS 4
 /* This is a totally random 32 bit number used as a hack to check if the key used to lookup maps 
@@ -109,6 +110,42 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
   return map;
 }
 
+bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
+  if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) return false;
+  for (int n = 0; n < map1->keys_seen; ++n) {
+    if (!map1->key_deleted[n]) {
+      void *val_ptr1 = map1->values_present + n * map1->value_size;
+      if (!klee_is_symbolic((uintptr_t)val_ptr1)) {
+        void* key_ptr1 = map1->keys_present + n * map1->key_size;
+        bool key_found = false;
+        for (int m = 0; m < map2->keys_seen; ++m) {
+          void *key_ptr2 = map2->keys_present + m * map2->key_size;
+          if (!memcmp(key_ptr1, key_ptr2, map2->key_size)) {
+            key_found = true;
+            if (map2->key_deleted[m]) return false;
+            else {
+              void *val_ptr2 = map2->values_present + m * map2->value_size;
+              if (klee_is_symbolic((uintptr_t)val_ptr2)) return false;
+              if (memcmp(val_ptr1, val_ptr2, map2->value_size)) {
+                return false;
+              }
+            }
+            break;
+          }
+        }
+
+        if (!key_found) return false;
+      }
+
+    }
+  }
+  return true;
+}
+
+bool map_equal(struct MapStub *map1, struct MapStub *map2) {
+  return map_subset_of(map1, map2) && map_subset_of(map2, map1);
+}
+
 void map_reset(struct MapStub *map){
   map->keys_seen = 0;
   memset(map->keys_present, 0, map->max_entries * map->key_size);
@@ -161,6 +198,7 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
 
 long map_update_elem(struct MapStub *map, const void *key, const void *value,
                      unsigned long flags) {
+  // void* val_ptr = map_lookup_elem(map, key);
   if (flags > 0) {
     for (int n = 0; n < map->keys_seen; ++n) {
       void *key_ptr = map->keys_present + n * map->key_size;

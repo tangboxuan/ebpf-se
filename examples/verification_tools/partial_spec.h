@@ -31,6 +31,8 @@ void functional_verify(xdp_func xdp_main,
     set_up_maps();
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
 
+    assert(map_equal(bpf_map_stubs[0], bpf_map_stubs[0]));
+
     if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
         // Run the program
         for (size_t no = 0; no < bpf_map_ctr; no++) {
