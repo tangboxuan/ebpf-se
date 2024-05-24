@@ -134,6 +134,8 @@ void bpf_map_reset_stub(struct bpf_map_def* map) {
   struct bpf_map_def *map_ptr = (struct bpf_map_def *) map;
   if (bpf_map_stub_types[map_ptr->map_id] == ArrayStub)
     array_reset(bpf_map_stubs[map_ptr->map_id]);
+  else if (bpf_map_stub_types[map_ptr->map_id] == MapStub)
+    map_reset(bpf_map_stubs[map_ptr->map_id]);
   else
     assert(0 && "Reset unsupported for given map type");
 }

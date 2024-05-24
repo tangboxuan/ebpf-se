@@ -107,6 +107,16 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
   return map;
 }
 
+void map_reset(struct MapStub *map){
+  map->keys_seen = 0;
+  memset(map->keys_present, 0, map->max_entries * map->key_size);
+  klee_make_symbolic(map->values_present, map->max_entries * map->value_size, map->val_type);
+  for (int n = 0; n < NUM_ELEMS; ++n) {
+    map->key_deleted[n] = 0;
+    map->keys_cached[n] = 0;
+  }
+}
+
 void *map_lookup_elem(struct MapStub *map, const void *key) {
   for (int n = 0; n < map->keys_seen; ++n) {
     void *key_ptr = map->keys_present + n * map->key_size;

@@ -33,9 +33,6 @@ struct __attribute__((__packed__)) pkt {
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
 int set_up_maps() {
-  BPF_MAP_INIT(&tx_port, "", "", "");
-  BPF_MAP_INIT(&flow_ctx_table, "", "", "");
-
   /* Init from xdp_fw_user.c */
   #define num_ports 2
   int key[num_ports] = {B_PORT,A_PORT};
@@ -66,12 +63,6 @@ int dummy_set_up_maps() {
   return 0;
 }
 
-int reset_maps() {
-  BPF_MAP_RESET(&tx_port);
-  BPF_MAP_RESET(&flow_ctx_table);
-  return 0;
-}
-
 int main(int argc, char** argv){
   struct pkt *packet = create_packet(sizeof(struct pkt));
   packet->ether.h_proto = BE_ETH_P_IP;
@@ -86,13 +77,14 @@ int main(int argc, char** argv){
   struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
   ctx->data_meta = 0;
   __u32 temp;
-  // klee_make_symbolic(&(temp), sizeof(temp), "VIGOR_DEVICE");
-  // klee_assume(temp==A_PORT||temp==B_PORT);
   ctx->ingress_ifindex = B_PORT;
   ctx->rx_queue_index = 0;
 
+  REGISTER_MAP(&tx_port);
+  REGISTER_MAP(&flow_ctx_table);
+
   bpf_begin();
 
-  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps, reset_maps);
+  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps);
 }
 #endif
