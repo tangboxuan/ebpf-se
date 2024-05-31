@@ -33,8 +33,6 @@ struct __attribute__((__packed__)) pkt {
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
 int set_up_maps() {
-  BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
-  BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
 
   /* Init from xdp_fw_user.c */
   #define num_ports 2
@@ -62,11 +60,6 @@ int set_up_maps() {
   /* Init done */
 }
 
-int reset_maps() {
-  BPF_MAP_RESET(&tx_port);
-  BPF_MAP_RESET(&flow_ctx_table);
-  return 0;
-}
 
 int main(int argc, char** argv){
   struct pkt *packet = create_packet(sizeof(struct pkt));
@@ -81,9 +74,10 @@ int main(int argc, char** argv){
   klee_assume(temp==A_PORT||temp==B_PORT);
   ctx->ingress_ifindex = temp;
   ctx->rx_queue_index = 0;
-  
+  BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
+  BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
   bpf_begin();
 
-  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps, reset_maps);
+  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps);
 }
 #endif

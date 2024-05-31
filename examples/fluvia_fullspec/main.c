@@ -122,7 +122,6 @@ struct __attribute__((__packed__)) pkt {
 };
 
 int set_up_maps() {
-    BPF_MAP_INIT(&ipfix_probe_map, "ipfix_probes", "", "");
     return 0;
 }
 
@@ -131,9 +130,10 @@ int main(int argc, char **argv) {
   struct pkt *pkt = create_packet(sizeof(struct pkt));
   struct xdp_md *test = create_ctx(pkt, sizeof(struct pkt), 0);
 
-  set_up_maps();
+  BPF_MAP_INIT(&ipfix_probe_map, "ipfix_probes", "", "");
+
   bpf_begin();
-functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0);
+functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0, set_up_maps);
 }
 
 #endif // KLEE_VERIFICATION

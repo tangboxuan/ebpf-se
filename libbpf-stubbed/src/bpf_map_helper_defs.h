@@ -70,6 +70,7 @@ struct MapStub {
   char* keys_present;   /* Array storing all keys map has seen */
   char* values_present; /* Value for each key */
   unsigned int max_entries;
+  unsigned int key_inserted_on_lookup[NUM_ELEMS];
   unsigned int key_deleted[NUM_ELEMS]; /* 1 in nth position implies nth key has been
                                  deleted */
   unsigned int keys_cached[NUM_ELEMS]; /* 1 in nth position implies nth key is cached */
@@ -80,6 +81,33 @@ struct MapStub {
   unsigned int key_size;
   unsigned int value_size;
 };
+
+void* map_get_copy(struct MapStub* map1) {
+  struct MapStub *map2 = malloc(sizeof(struct MapStub));
+  klee_assert(map2 != NULL);
+  map2->name = malloc(strlen(map1->name) + 1);
+  strcpy(map2->name, map1->name);
+  map2->key_type = malloc(strlen(map1->key_type) + 1);
+  strcpy(map2->key_type, map1->key_type);
+  map2->val_type = malloc(strlen(map1->val_type) + 1);
+  strcpy(map2->val_type, map1->val_type);
+  map2->key_size = map1->key_size;
+  map2->value_size = map1->value_size;
+  map2->max_entries = map1->max_entries;
+  map2->keys_seen = map1->keys_seen;
+
+  map2->keys_present = calloc(map1->max_entries, map1->key_size);
+  memcpy(map2->keys_present, map1->keys_present, map1->max_entries * map1->key_size);
+  map2->values_present = calloc(map1->max_entries, map1->value_size);
+  memcpy(map2->values_present, map1->values_present, map1->max_entries * map1->value_size);
+
+  for (int n = 0; n < NUM_ELEMS; ++n) {
+    map2->key_deleted[n] = map1->key_deleted[n];
+    map2->keys_cached[n] = map1->keys_cached[n];
+    map2->key_inserted_on_lookup[n] = map1->key_inserted_on_lookup[n];
+  }
+  return map2;
+}
 
 void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_size, unsigned int value_size,
                    unsigned int max_entries) {
@@ -106,37 +134,51 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
     // caching concrete
     // map->keys_cached[n] = klee_int("map_keys_cached");
     map->keys_cached[n] = 0;
+    map->key_inserted_on_lookup[n] = 0;
   }
   return map;
 }
+struct mykey {
+	/*per-application */
+	unsigned short ip_proto;
+	unsigned short l4_src;
+	unsigned short l4_dst;
+	unsigned int ip_src;
+	unsigned int ip_dst;
+
+};
+
+struct myleaf {
+	unsigned char out_port;
+	unsigned short in_port;
+//	flow_register_t flow_reg;
+};
 
 bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
   if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) return false;
   for (int n = 0; n < map1->keys_seen; ++n) {
-    if (!map1->key_deleted[n]) {
+    if (!map1->key_deleted[n] && !map1->key_inserted_on_lookup[n]) {
+      void* key_ptr1 = map1->keys_present + n * map1->key_size;
       void *val_ptr1 = map1->values_present + n * map1->value_size;
-      if (!klee_is_symbolic((uintptr_t)val_ptr1)) {
-        void* key_ptr1 = map1->keys_present + n * map1->key_size;
-        bool key_found = false;
-        for (int m = 0; m < map2->keys_seen; ++m) {
-          void *key_ptr2 = map2->keys_present + m * map2->key_size;
-          if (!memcmp(key_ptr1, key_ptr2, map2->key_size)) {
-            key_found = true;
-            if (map2->key_deleted[m]) return false;
-            else {
-              void *val_ptr2 = map2->values_present + m * map2->value_size;
-              if (klee_is_symbolic((uintptr_t)val_ptr2)) return false;
-              if (memcmp(val_ptr1, val_ptr2, map2->value_size)) {
-                return false;
-              }
-            }
-            break;
+      
+      bool key_found = false;
+      for (int m = 0; m < map2->keys_seen; ++m) {
+        void *key_ptr2 = map2->keys_present + m * map2->key_size;
+        if (!memcmp(key_ptr1, key_ptr2, map2->key_size)) {
+          if (map2->key_deleted[m]) {
+            return false;
           }
+          else {
+            key_found = true;
+            void *val_ptr2 = map2->values_present + m * map2->value_size;
+            if (memcmp(val_ptr1, val_ptr2, map2->value_size)) {
+              return false;
+            }
+          }
+          break;
         }
-
-        if (!key_found) return false;
       }
-
+      if (!key_found) return false;
     }
   }
   return true;
@@ -184,6 +226,7 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
   void *key_ptr = map->keys_present + map->keys_seen * map->key_size;
   memcpy(key_ptr, key, map->key_size);
   void *val_ptr = map->values_present + map->keys_seen * map->value_size;
+  map->key_inserted_on_lookup[map->keys_seen] = 1;
 
   if (map_has_this_key) {
     map->key_deleted[map->keys_seen] = 0;
@@ -198,14 +241,14 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
 
 long map_update_elem(struct MapStub *map, const void *key, const void *value,
                      unsigned long flags) {
-  // void* val_ptr = map_lookup_elem(map, key);
-  if (flags > 0) {
+  // if (flags > 0) {
     for (int n = 0; n < map->keys_seen; ++n) {
       void *key_ptr = map->keys_present + n * map->key_size;
       if (!memcmp(key_ptr, key, map->key_size)) {
         klee_assert(map->key_deleted[n] &&
                     "Trying to insert already present key");
         map->key_deleted[n] = 0;
+        map->key_inserted_on_lookup[n] = 0;
         void *val_ptr = map->values_present + n * map->value_size;
         memcpy(val_ptr, value, map->value_size);
         if (!(map->keys_cached[n])) { /* Branching for Symbex */
@@ -214,13 +257,14 @@ long map_update_elem(struct MapStub *map, const void *key, const void *value,
         return 0;
       }
     }
-  }
+  // }
   klee_assert(map->keys_seen < NUM_ELEMS && "No space left in the map stub");
   void *key_ptr = map->keys_present + map->keys_seen * map->key_size;
   memcpy(key_ptr, key, map->key_size);
   void *val_ptr = map->values_present + map->keys_seen * map->value_size;
   memcpy(val_ptr, value, map->value_size);
   map->key_deleted[map->keys_seen] = 0;
+  map->key_inserted_on_lookup[map->keys_seen] = 0;
   map->keys_seen++;
   return 0;
 }

@@ -35,8 +35,8 @@ struct __attribute__((__packed__)) pkt {
 
 struct bpf_map_def SEC("maps") example_table = {
 	.type = BPF_MAP_TYPE_HASH,
-	.key_size = sizeof(int),
-	.value_size = sizeof(int),
+	.key_size = sizeof(char),
+	.value_size = sizeof(char),
 	.max_entries = 8,
 };
 
@@ -75,22 +75,22 @@ int xdp_main(struct xdp_md *ctx) {
 	if (data + nh_off  > data_end)
 		goto EOP;
 
-	int key = 0;
+	char key = '\0';
 	
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	char* lookuped_value = bpf_map_lookup_elem(&example_table, data);
 	if (!lookuped_value) return XDP_DROP;
-	if (*lookuped_value == 0) return XDP_TX;
-	payload[0] = *lookuped_value;
+	if (*lookuped_value == '\0') return XDP_TX;
+	// payload[0] = *lookuped_value;
 
-	if (payload[1] == '\0') {
-		int value = 1;
-		bpf_map_update_elem(&example_table, &key, &value, 0);
-	}
+	// if (payload[1] == '\0') {
+	// 	int value = 1;
+	// 	bpf_map_update_elem(&example_table, &key, &value, 0);
+	// }
 
-	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	if (!lookuped_value) return XDP_DROP;
-	payload[2] = *lookuped_value;
-	return XDP_PASS;
+	// lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	// if (!lookuped_value) return XDP_DROP;
+	// payload[2] = *lookuped_value;
+	// return XDP_PASS;
 
 	EOP:
 		return XDP_DROP;
@@ -107,38 +107,32 @@ int xdp_spec(struct xdp_md *ctx) {
 
 	if (ip->protocol != IPPROTO_TCP) return XDP_PASS;
 	return XDP_TX;
-	int key = 0;
+	// int key = 0;
 
-	int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[0] = *lookuped_value;
+	// int* lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	// payload[0] = *lookuped_value;
 
-	if (payload[1] == '\0') {
-		int value = 1;
-		bpf_map_update_elem(&example_table, &key, &value, 0);
-	}
+	// if (payload[1] == '\0') {
+	// 	int value = 1;
+	// 	bpf_map_update_elem(&example_table, &key, &value, 0);
+	// }
 
-	lookuped_value = bpf_map_lookup_elem(&example_table, &key);
-	payload[2] = *lookuped_value;
-	return XDP_PASS;
+	// lookuped_value = bpf_map_lookup_elem(&example_table, &key);
+	// payload[2] = *lookuped_value;
+	// return XDP_PASS;
 }
 
-int set_up_maps() {
-  BPF_MAP_INIT(&example_table, "example_table", "example_key", "example_value");
-  int key = 0;
-  int value = 0;
-  if(bpf_map_update_elem(&example_table, &key, &value, 0) < 0)
-    return -1;
-  return 0;
-}
-
-int reset_maps() {
-	return 0;
-}
 
 int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
 	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
-	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0, set_up_maps, reset_maps);
+  	BPF_MAP_INIT(&example_table, "example_table", "example_key", "example_value");
+	// char key = '\0';
+	char* key = (char*)packet;
+  	char value = '\0';
+  	if(bpf_map_update_elem(&example_table, key, &value, 0) < 0)
+    	return -1;
+	functional_verify(xdp_main, xdp_spec, ctx, sizeof(struct pkt), 0);
 	return 0;
 }
 #endif
