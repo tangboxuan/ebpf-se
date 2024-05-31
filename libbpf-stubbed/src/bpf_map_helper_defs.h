@@ -71,6 +71,7 @@ struct MapStub {
   char* values_present; /* Value for each key */
   unsigned int max_entries;
   unsigned int key_inserted_on_lookup[NUM_ELEMS];
+  unsigned int key_deleted_on_lookup_insert[NUM_ELEMS];
   unsigned int key_deleted[NUM_ELEMS]; /* 1 in nth position implies nth key has been
                                  deleted */
   unsigned int keys_cached[NUM_ELEMS]; /* 1 in nth position implies nth key is cached */
@@ -105,6 +106,7 @@ void* map_get_copy(struct MapStub* map1) {
     map2->key_deleted[n] = map1->key_deleted[n];
     map2->keys_cached[n] = map1->keys_cached[n];
     map2->key_inserted_on_lookup[n] = map1->key_inserted_on_lookup[n];
+    map2->key_deleted_on_lookup_insert[n] = map1->key_deleted_on_lookup_insert[n];
   }
   return map2;
 }
@@ -135,6 +137,7 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
     // map->keys_cached[n] = klee_int("map_keys_cached");
     map->keys_cached[n] = 0;
     map->key_inserted_on_lookup[n] = 0;
+    map->key_deleted_on_lookup_insert[n] = 0;
   }
   return map;
 }
@@ -157,7 +160,7 @@ struct myleaf {
 bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
   if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) return false;
   for (int n = 0; n < map1->keys_seen; ++n) {
-    if (!map1->key_deleted[n] && !map1->key_inserted_on_lookup[n]) {
+    if (!map1->key_deleted[n]) {
       void* key_ptr1 = map1->keys_present + n * map1->key_size;
       void *val_ptr1 = map1->values_present + n * map1->value_size;
       
@@ -234,9 +237,29 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
     return val_ptr;
   } else {
     map->key_deleted[map->keys_seen] = 1;
+    map->key_deleted_on_lookup_insert[map->keys_seen] = 1;
     map->keys_seen++;
     return NULL;
   }
+}
+
+bool map_same_lookup_inserts(struct MapStub *m1, struct MapStub *m2) {
+  for (int i = 0; i < m1->keys_seen; i++) {
+    if (m1->key_inserted_on_lookup[i]) {
+      void* key_ptr1 = m1->keys_present + i * m1->key_size;
+  
+      for (int j = 0; j < m2->keys_seen; ++j) {
+        void *key_ptr2 = m2->keys_present + j * m2->key_size;
+        if (!memcmp(key_ptr1, key_ptr2, m2->key_size)) {
+          if (m1->key_deleted_on_lookup_insert[i] != m2->key_deleted_on_lookup_insert[j]) {
+            return false;
+          }
+          break;
+        }
+      }
+    }
+  }
+  return true;
 }
 
 long map_update_elem(struct MapStub *map, const void *key, const void *value,

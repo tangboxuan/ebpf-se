@@ -26,9 +26,9 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
-    void* initial_copy = map_copy(bpf_map_stubs[0]);
+    void* initial_copy = map_get_copy(bpf_map_stubs[0]);
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
-    void* table_copy = map_copy(bpf_map_stubs[0]);
+    void* table_copy = map_get_copy(bpf_map_stubs[0]);
 
     if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
         // Run the program
@@ -38,6 +38,8 @@ void functional_verify(xdp_func xdp_main,
         // set_up_maps();
         bpf_map_stubs[0] = initial_copy;
         struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx);
+
+        if (!map_same_lookup_inserts(table_copy, bpf_map_stubs[0])) return;
 
         assert(map_equal(table_copy, bpf_map_stubs[0]));
 
