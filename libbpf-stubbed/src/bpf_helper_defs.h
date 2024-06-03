@@ -76,6 +76,8 @@ unsigned int bpf_map_ctr = 0;
 unsigned int record_calls = 0;
 char *prefix; /* For tracing */
 
+int use_copy = 0;
+
 /* This is the same list of PCVs and OVs as in the contract file. This is
  * unfortunate duplication and should be fixed */
 
@@ -172,7 +174,7 @@ static __attribute__ ((noinline)) void *bpf_map_lookup_elem(void *map, const voi
   if (bpf_map_stub_types[map_ptr->map_id] == ArrayStub)
     return array_lookup_elem(bpf_map_stubs[map_ptr->map_id], key);
   else if (bpf_map_stub_types[map_ptr->map_id] == MapStub)
-    return map_lookup_elem(bpf_map_stubs[map_ptr->map_id], key);
+    return map_lookup_elem(bpf_map_stubs[map_ptr->map_id + use_copy], key);
   else if (bpf_map_stub_types[map_ptr->map_id] == MapofMapStub)
     return map_of_map_lookup_elem(bpf_map_stubs[map_ptr->map_id], key);
   else

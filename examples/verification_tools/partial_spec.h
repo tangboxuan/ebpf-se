@@ -26,22 +26,23 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
-    void* initial_copy = map_get_copy(bpf_map_stubs[0]);
+    bpf_map_stubs[1] = map_get_copy(bpf_map_stubs[0]);
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
-    void* table_copy = map_get_copy(bpf_map_stubs[0]);
+    // void* table_copy = map_get_copy(bpf_map_stubs[0]);
 
     if(spec_end_state.rvalue != XDP_ANY_IGNORE_STATE) {
         // Run the program
-        for (size_t no = 0; no < bpf_map_ctr; no++) {
-            BPF_MAP_RESET(bpf_map_stubs[no]);
-        }
+        // for (size_t no = 0; no < bpf_map_ctr; no++) {
+        //     BPF_MAP_RESET(bpf_map_stubs[no]);
+        // }
         // set_up_maps();
-        bpf_map_stubs[0] = initial_copy;
+        // bpf_map_stubs[0] = initial_copy;
+        use_copy = bpf_map_ctr;
         struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx);
 
-        if (!map_same_lookup_inserts(table_copy, bpf_map_stubs[0])) return;
+        if (!map_same_lookup_inserts(bpf_map_stubs[0], bpf_map_stubs[1])) return;
 
-        assert(map_equal(table_copy, bpf_map_stubs[0]));
+        assert(map_equal(bpf_map_stubs[0], bpf_map_stubs[1]));
 
         if (spec_end_state.rvalue != XDP_ANY)
             assert(return_value_equal(&prog_end_state, &spec_end_state));
