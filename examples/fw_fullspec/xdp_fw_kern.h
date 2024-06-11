@@ -65,18 +65,17 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/partial_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
-	struct ethhdr *ethernet = get_eth(ctx);
-	struct iphdr *ip = get_ip(ctx);
-	struct udphdr *l4 = get_tcp_udp(ctx);
-	
+	struct ethhdr *ethernet = (struct ethhdr *)(long)ctx->data;
+	struct iphdr *ip = (struct iphdr*)(ethernet+1);
+	struct udphdr *l4 = (struct udphdr*)(ip+1);
+
 	if(ethernet->h_proto != BE_ETH_P_IP)
 		return XDP_DROP;
 
 	if(ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
-			return XDP_DROP;
+		return XDP_DROP;
 
-
-	struct flow_ctx_table_key flow_key = {0};
+	struct flow_ctx_table_key flow_key = { 0 };
 	flow_key.ip_proto = ip->protocol;
 	flow_key.ip_src = ip->saddr;
 	flow_key.ip_dst = ip->daddr;
@@ -87,17 +86,13 @@ int xdp_fw_spec(struct xdp_md *ctx)
 
 	struct flow_ctx_table_leaf *flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 	if (ctx->ingress_ifindex == B_PORT){
-		// if (flow_leaf)
-		// 	return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
-		// else 
-		// 	return XDP_DROP;
-		return XDP_DROP;
+		if (flow_leaf)
+			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+		else 
+			return XDP_DROP;
 	} else {
 		if (!flow_leaf){
-			struct flow_ctx_table_leaf new_flow = {0};
-			new_flow.in_port = B_PORT;
-			new_flow.out_port = A_PORT; 
-			assert(use_copy == 0);
+			struct flow_ctx_table_leaf new_flow = {A_PORT, B_PORT};
 			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		
@@ -179,17 +174,15 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	if (ingress_ifindex == B_PORT){
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 			
-		// if (flow_leaf)
-		// 	return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
-		// else 
-		// 	return XDP_DROP;
-		return XDP_DROP;
+		if (flow_leaf)
+			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+		else 
+			return XDP_DROP;
 	} else {
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 		new_flow.in_port = B_PORT;
-		new_flow.out_port = 100; 
+		new_flow.out_port = A_PORT; 
 		if (!flow_leaf){
-			//ctx->ingress_ifindex ;
 			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		

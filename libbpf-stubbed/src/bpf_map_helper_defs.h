@@ -144,71 +144,12 @@ void *map_allocate(char* name, char* key_type, char* val_type, unsigned int key_
   }
   return map;
 }
-struct mykey {
-	/*per-application */
-	unsigned short ip_proto;
-	unsigned short l4_src;
-	unsigned short l4_dst;
-	unsigned int ip_src;
-	unsigned int ip_dst;
 
-};
-
-struct myleaf {
-	unsigned char out_port;
-	unsigned short in_port;
+struct my_leaf {
+	int out_port;
+	int in_port;
 //	flow_register_t flow_reg;
 };
-
-bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
-  if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) {
-    return false;
-  };
-  for (int n = 0; n < map1->keys_seen; ++n) {
-    if (!map1->key_deleted[n]) {
-      void* key_ptr1 = map1->keys_present + n * map1->key_size;
-      void *val_ptr1 = map1->values_present + n * map1->value_size;
-      
-      bool key_found = false;
-      for (int m = 0; m < map2->keys_seen; ++m) {
-        void *key_ptr2 = map2->keys_present + m * map2->key_size;
-        if (!memcmp(key_ptr1, key_ptr2, map2->key_size)) {
-          if (map2->key_deleted[m]) {
-            return false;
-          }
-          else {
-            key_found = true;
-            void *val_ptr2 = map2->values_present + m * map2->value_size;
-            if (memcmp(val_ptr1, val_ptr2, map2->value_size)) {
-              return false;
-            }
-          }
-          break;
-        }
-      }
-      if (!key_found) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-bool map_equal(struct MapStub *map1, struct MapStub *map2) {
-  bool a = map_subset_of(map1, map2);
-  bool b = map_subset_of(map2, map1);
-  return a && b;
-}
-
-void map_reset(struct MapStub *map){
-  map->keys_seen = 0;
-  memset(map->keys_present, 0, map->max_entries * map->key_size);
-  klee_make_symbolic(map->values_present, map->max_entries * map->value_size, map->val_type);
-  for (int n = 0; n < NUM_ELEMS; ++n) {
-    map->key_deleted[n] = 0;
-    map->keys_cached[n] = 0;
-  }
-}
 
 void *map_lookup_elem(struct MapStub *map, const void *key) {
   for (int n = 0; n < map->keys_seen; ++n) {
@@ -242,6 +183,7 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
 
   if (map_has_this_key) {
     map->key_deleted[map->keys_seen] = 0;
+    map->key_deleted_on_lookup_insert[map->keys_seen] = 0;
     map->keys_seen++;
     return val_ptr;
   } else {
@@ -249,6 +191,66 @@ void *map_lookup_elem(struct MapStub *map, const void *key) {
     map->key_deleted_on_lookup_insert[map->keys_seen] = 1;
     map->keys_seen++;
     return NULL;
+  }
+}
+
+bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
+  if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) {
+    return false;
+  };
+  for (int n = 0; n < map1->keys_seen; ++n) {
+    if (!map1->key_deleted[n]) {
+      void* key_ptr1 = map1->keys_present + n * map1->key_size;
+      void *val_ptr1 = map1->values_present + n * map1->value_size;
+      
+      bool key_found = false;
+      for (int m = 0; m < map2->keys_seen; ++m) {
+        void *key_ptr2 = map2->keys_present + m * map2->key_size;
+        if (!memcmp(key_ptr1, key_ptr2, map2->key_size)) {
+          if (map2->key_deleted[m]) {
+            return false;
+          }
+          else {
+            key_found = true;
+            void *val_ptr2 = map2->values_present + m * map2->value_size;
+            if (memcmp(val_ptr1, val_ptr2, map2->value_size)) {
+              struct my_leaf *a = val_ptr1;
+              struct my_leaf *b = val_ptr2;
+              klee_print_expr("map1 lookup", map1->key_inserted_on_lookup[n]);
+              klee_print_expr("map2 lookup", map2->key_inserted_on_lookup[m]);
+              klee_print_expr("map1 deleted", map1->key_deleted_on_lookup_insert[n]);
+              klee_print_expr("map2 deleted", map2->key_deleted_on_lookup_insert[m]);
+              klee_print_expr("other a.o", a->out_port);
+              klee_print_expr("other a.i", a->in_port);
+              klee_print_expr("other b.o", b->out_port);
+              klee_print_expr("other b.i", b->in_port);
+              return false;
+            }
+          }
+          break;
+        }
+      }
+      if (!key_found) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool map_equal(struct MapStub *map1, struct MapStub *map2) {
+  bool a = map_subset_of(map1, map2);
+  bool b = map_subset_of(map2, map1);
+  return a && b;
+}
+
+void map_reset(struct MapStub *map){
+  map->keys_seen = 0;
+  memset(map->keys_present, 0, map->max_entries * map->key_size);
+  klee_make_symbolic(map->values_present, map->max_entries * map->value_size, map->val_type);
+  for (int n = 0; n < NUM_ELEMS; ++n) {
+    map->key_deleted[n] = 0;
+    map->keys_cached[n] = 0;
   }
 }
 
@@ -262,7 +264,7 @@ bool map_same_lookup_inserts(struct MapStub *m1, struct MapStub *m2) {
         void *key_ptr2 = m2->keys_present + j * m2->key_size;
         if (!memcmp(key_ptr1, key_ptr2, m2->key_size)) {
           key_found = true;
-          if (m2->key_inserted_on_lookup[j] && m1->key_deleted_on_lookup_insert[i] != m2->key_deleted_on_lookup_insert[j]) {
+          if (m2->key_inserted_on_lookup[j] && (m1->key_deleted_on_lookup_insert[i] != m2->key_deleted_on_lookup_insert[j])) {
             return false;
           }
           break;
@@ -276,14 +278,13 @@ bool map_same_lookup_inserts(struct MapStub *m1, struct MapStub *m2) {
 
 long map_update_elem(struct MapStub *map, const void *key, const void *value,
                      unsigned long flags) {
-  // if (flags > 0) {
     for (int n = 0; n < map->keys_seen; ++n) {
       void *key_ptr = map->keys_present + n * map->key_size;
       if (!memcmp(key_ptr, key, map->key_size)) {
         klee_assert(map->key_deleted[n] &&
                     "Trying to insert already present key");
         map->key_deleted[n] = 0;
-        map->key_inserted_on_lookup[n] = 0;
+        // map->key_inserted_on_lookup[n] = 0;
         void *val_ptr = map->values_present + n * map->value_size;
         memcpy(val_ptr, value, map->value_size);
         if (!(map->keys_cached[n])) { /* Branching for Symbex */

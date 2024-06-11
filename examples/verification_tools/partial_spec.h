@@ -9,12 +9,14 @@
 
 #ifndef USES_BPF_MAP_UPDATE_ELEM
 #define USES_BPF_MAP_UPDATE_ELEM
+#endif
+
 #ifndef USES_BPF_MAP_DELETE_ELEM
 #define USES_BPF_MAP_DELETE_ELEM
 #endif
 
 #define BPF_RETURN(x) return x
-#endif
+
 #define BPF_MAP_KEY_EXISTS(map, key) {\
     void* value = malloc(map->value_size); \
     assert(value); \
@@ -64,8 +66,6 @@ void functional_verify(xdp_func xdp_main,
         for (int i = 0; i < bpf_map_ctr; i++) {
             assert(map_equal(bpf_map_stubs[i], bpf_map_stubs[i+bpf_map_ctr]));
         }
-        // assert(map_equal(bpf_map_stubs[0], bpf_map_stubs[2]));
-        // assert(map_equal(bpf_map_stubs[1], bpf_map_stubs[3]));
 
         if (spec_end_state.rvalue != XDP_ANY)
             assert(return_value_equal(&prog_end_state, &spec_end_state));
