@@ -86,8 +86,9 @@ struct MapStub {
 void* map_get_copy(struct MapStub* map1) {
   struct MapStub *map2 = malloc(sizeof(struct MapStub));
   klee_assert(map2 != NULL);
-  map2->name = malloc(strlen(map1->name) + 1);
+  map2->name = malloc(strlen(map1->name) + 6);
   strcpy(map2->name, map1->name);
+  strcat(map2->name, "_copy");
   map2->key_type = malloc(strlen(map1->key_type) + 1);
   strcpy(map2->key_type, map1->key_type);
   map2->val_type = malloc(strlen(map1->val_type) + 1);
@@ -100,6 +101,8 @@ void* map_get_copy(struct MapStub* map1) {
   map2->keys_present = calloc(map1->max_entries, map1->key_size);
   memcpy(map2->keys_present, map1->keys_present, map1->max_entries * map1->key_size);
   map2->values_present = calloc(map1->max_entries, map1->value_size);
+  klee_assert(map2->keys_present && map2->values_present);
+  klee_make_symbolic(map2->values_present, map2->max_entries*map2->value_size, map2->val_type);
   memcpy(map2->values_present, map1->values_present, map1->max_entries * map1->value_size);
 
   for (int n = 0; n < NUM_ELEMS; ++n) {
@@ -158,7 +161,9 @@ struct myleaf {
 };
 
 bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
-  if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) return false;
+  if (map1->key_size != map2->key_size || map1->value_size != map2->value_size) {
+    return false;
+  };
   for (int n = 0; n < map1->keys_seen; ++n) {
     if (!map1->key_deleted[n]) {
       void* key_ptr1 = map1->keys_present + n * map1->key_size;
@@ -181,14 +186,18 @@ bool map_subset_of(struct MapStub *map1, struct MapStub *map2) {
           break;
         }
       }
-      if (!key_found) return false;
+      if (!key_found) {
+        return false;
+      }
     }
   }
   return true;
 }
 
 bool map_equal(struct MapStub *map1, struct MapStub *map2) {
-  return map_subset_of(map1, map2) && map_subset_of(map2, map1);
+  bool a = map_subset_of(map1, map2);
+  bool b = map_subset_of(map2, map1);
+  return a && b;
 }
 
 void map_reset(struct MapStub *map){

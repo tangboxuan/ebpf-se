@@ -217,9 +217,9 @@ static __attribute__ ((noinline)) long bpf_map_update_elem(void *map, const void
   // TRACE_VAL((uint32_t)(map_ptr), "map", _u32)
   // TRACE_VAR(map_ptr->type, "bpf_map_type");
   if (bpf_map_stub_types[map_ptr->map_id] == ArrayStub)
-    return array_update_elem(bpf_map_stubs[map_ptr->map_id], key, value, flags);
+    return array_update_elem(bpf_map_stubs[map_ptr->map_id + use_copy], key, value, flags);
   else if (bpf_map_stub_types[map_ptr->map_id] == MapStub)  // XSK_MAP should only update from userspace
-    return map_update_elem(bpf_map_stubs[map_ptr->map_id], key, value, flags);
+    return map_update_elem(bpf_map_stubs[map_ptr->map_id + use_copy], key, value, flags);
   else
     assert(0 && "Unsupported map type");
 }
@@ -242,7 +242,7 @@ static __attribute__ ((noinline)) long bpf_map_delete_elem(void *map, const void
   // TRACE_VAL((uint32_t)(map_ptr), "map", _u32)
   // TRACE_VAR(map_ptr->type, "bpf_map_type");
   if (bpf_map_stub_types[map_ptr->map_id] == MapStub)
-    return map_delete_elem(bpf_map_stubs[map_ptr->map_id], key);
+    return map_delete_elem(bpf_map_stubs[map_ptr->map_id + use_copy], key);
   else
     assert(0 && "Unsupported map type");
 }
@@ -1623,7 +1623,7 @@ static __attribute__ ((noinline)) long bpf_redirect_map (void *map, __u32 key, _
   if (bpf_map_stub_types[map_ptr->map_id] == ArrayStub)
     redirected_elem = array_lookup_elem(bpf_map_stubs[map_ptr->map_id], &key);
   else if (bpf_map_stub_types[map_ptr->map_id] == MapStub)
-    redirected_elem = map_lookup_elem(bpf_map_stubs[map_ptr->map_id], &key);
+    redirected_elem = map_lookup_elem(bpf_map_stubs[map_ptr->map_id + use_copy], &key);
   else if (bpf_map_stub_types[map_ptr->map_id] == MapofMapStub)
     redirected_elem = map_of_map_lookup_elem(bpf_map_stubs[map_ptr->map_id], &key);
   else

@@ -17,8 +17,8 @@ struct flow_ctx_table_key {
 };
 
 struct flow_ctx_table_leaf {
-	__u8 out_port;
-	__u16 in_port;
+	int out_port;
+	int in_port;
 //	flow_register_t flow_reg;
 };
 

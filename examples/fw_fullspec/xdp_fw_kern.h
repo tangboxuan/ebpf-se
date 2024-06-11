@@ -47,7 +47,7 @@ static inline void biflow(struct flow_ctx_table_key *flow_key){
 }
 
 struct bpf_map_def SEC("maps") tx_port = {
-	.type = BPF_MAP_TYPE_DEVMAP,
+	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(int),
 	.value_size = sizeof(int),
 	.max_entries = 10,
@@ -65,7 +65,6 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/partial_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
-	struct flow_ctx_table_leaf new_flow = {0};
 	struct ethhdr *ethernet = get_eth(ctx);
 	struct iphdr *ip = get_ip(ctx);
 	struct udphdr *l4 = get_tcp_udp(ctx);
@@ -87,17 +86,19 @@ int xdp_fw_spec(struct xdp_md *ctx)
 	biflow(&flow_key);
 
 	struct flow_ctx_table_leaf *flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
-
 	if (ctx->ingress_ifindex == B_PORT){
-		if (flow_leaf)
-			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
-		else 
-			return XDP_DROP;
+		// if (flow_leaf)
+		// 	return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+		// else 
+		// 	return XDP_DROP;
+		return XDP_DROP;
 	} else {
 		if (!flow_leaf){
+			struct flow_ctx_table_leaf new_flow = {0};
 			new_flow.in_port = B_PORT;
-			new_flow.out_port = A_PORT; //ctx->ingress_ifindex ;
-			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, BPF_ANY);
+			new_flow.out_port = A_PORT; 
+			assert(use_copy == 0);
+			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		
 		return bpf_redirect_map(&tx_port, B_PORT, 0);
@@ -168,7 +169,6 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	bpf_debug("extracting flow key ... \n");
 	/* flow key */
 	flow_key.ip_proto = ip->protocol;
-
 	flow_key.ip_src = ip->saddr;
 	flow_key.ip_dst = ip->daddr;
 	flow_key.l4_src = l4->source;
@@ -179,17 +179,18 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	if (ingress_ifindex == B_PORT){
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 			
-		if (flow_leaf)
-			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
-		else 
-			return XDP_DROP;
+		// if (flow_leaf)
+		// 	return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+		// else 
+		// 	return XDP_DROP;
+		return XDP_DROP;
 	} else {
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
-			
+		new_flow.in_port = B_PORT;
+		new_flow.out_port = 100; 
 		if (!flow_leaf){
-			new_flow.in_port = B_PORT;
-			new_flow.out_port = A_PORT; //ctx->ingress_ifindex ;
-			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, BPF_ANY);
+			//ctx->ingress_ifindex ;
+			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		
 		return bpf_redirect_map(&tx_port, B_PORT, 0);
