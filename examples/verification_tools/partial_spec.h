@@ -40,7 +40,7 @@ void functional_verify(xdp_func xdp_main,
         use_copy = bpf_map_ctr;
         struct xdp_end_state prog_end_state = get_xdp_end_state(xdp_main, ctx);
 
-        if (!map_same_lookup_inserts(bpf_map_stubs[0], bpf_map_stubs[1])) return;
+        if (!map_same_lookup_inserts(bpf_map_stubs[0], bpf_map_stubs[1]) || !map_same_lookup_inserts(bpf_map_stubs[1], bpf_map_stubs[0]) ) return;
 
         assert(map_equal(bpf_map_stubs[0], bpf_map_stubs[1]));
 

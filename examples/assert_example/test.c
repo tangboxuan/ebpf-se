@@ -46,6 +46,8 @@ int xdp_main(struct xdp_md *ctx) {
 	struct tcphdr *tcp;
 	char		  *payload;
 	uint64_t nh_off = 0;
+	int x = 100;
+	BPF_ASSERT_CONSTANT(&x, 4);
 
 	eth = data;
 	nh_off = sizeof(*eth);
@@ -58,7 +60,7 @@ int xdp_main(struct xdp_md *ctx) {
 		goto EOP;
 
 	if(ip->protocol != IPPROTO_TCP){
-		BPF_RETURN(XDP_PASS);
+		return (XDP_PASS);
 	}
 
 	tcp = data + nh_off;
@@ -93,17 +95,17 @@ int xdp_main(struct xdp_md *ctx) {
 			payload[2] = value;
 		
 		BPF_ASSERT("", payload[2]=='\1');
-		BPF_RETURN(XDP_TX);
+		return (XDP_TX);
 	}
 	BPF_ASSERT("", payload[0]!=0);
 	BPF_ASSERT_RETURN(XDP_PASS);
 	BPF_ASSERT_CONSTANT(&value, sizeof(value));
 
 	payload[1] = value;
-	BPF_RETURN(XDP_PASS);
+	return (XDP_PASS);
 
 	EOP:
-		BPF_RETURN(XDP_DROP);
+		return (XDP_DROP);
 }
 
 
@@ -116,6 +118,6 @@ int main() {
 	struct pkt *packet = create_packet(sizeof(struct pkt));
 	struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
 	// set_up_maps();
-	xdp_main(ctx);
+	BPF_RETURN(xdp_main(ctx));
 }
 #endif

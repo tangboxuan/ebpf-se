@@ -247,16 +247,19 @@ bool map_same_lookup_inserts(struct MapStub *m1, struct MapStub *m2) {
   for (int i = 0; i < m1->keys_seen; i++) {
     if (m1->key_inserted_on_lookup[i]) {
       void* key_ptr1 = m1->keys_present + i * m1->key_size;
+      bool key_found = false;
   
       for (int j = 0; j < m2->keys_seen; ++j) {
         void *key_ptr2 = m2->keys_present + j * m2->key_size;
         if (!memcmp(key_ptr1, key_ptr2, m2->key_size)) {
-          if (m1->key_deleted_on_lookup_insert[i] != m2->key_deleted_on_lookup_insert[j]) {
+          key_found = true;
+          if (m2->key_inserted_on_lookup[j] && m1->key_deleted_on_lookup_insert[i] != m2->key_deleted_on_lookup_insert[j]) {
             return false;
           }
           break;
         }
       }
+      if (!key_found && !m1->key_deleted_on_lookup_insert[i]) return false;
     }
   }
   return true;
@@ -299,6 +302,7 @@ long map_delete_elem(struct MapStub *map, const void *key) {
       klee_assert(!map->key_deleted[n] &&
                   "Trying to delete already deleted key");
       map->key_deleted[n] = 1;
+      map->key_inserted_on_lookup[n] = 0;
       return 0;
     }
   }
