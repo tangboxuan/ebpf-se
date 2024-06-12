@@ -250,6 +250,15 @@ static __attribute__ ((noinline)) long bpf_map_delete_elem(void *map, const void
 static long (*bpf_map_delete_elem)(void *map, const void *key) = (void *) 3;
 #endif
 
+void duplicate_maps() {
+  for (int i = 0; i < bpf_map_ctr; i++) {
+    if (bpf_map_stub_types[i] == MapStub) {
+        bpf_map_stubs[i+bpf_map_ctr] = map_get_copy(bpf_map_stubs[i]);
+    }
+    else assert(0 && "Unsupported map type");
+  }
+}
+
 /*
  * bpf_probe_read
  *

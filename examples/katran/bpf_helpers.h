@@ -36,6 +36,7 @@
 enum MapStubTypes { ArrayStub, MapStub, MapofMapStub };
 void *bpf_map_stubs[MAX_BPF_MAPS];
 enum MapStubTypes bpf_map_stub_types[MAX_BPF_MAPS];
+int use_copy = 0;
 unsigned int bpf_map_ctr = 0;
 
 unsigned int record_calls = 0;

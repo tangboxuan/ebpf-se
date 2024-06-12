@@ -107,23 +107,22 @@ int xdp_prog(struct xdp_md *ctx)
     return XDP_PASS;
 }
 
-int xdp_spec(struct xdp_md *ctx) {
-    return XDP_PASS;
-}
-
 /** Symbex driver starts here **/
 
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
+
+int xdp_spec(struct xdp_md *ctx) {
+    BPF_IGNORE_MAP_STATE();
+    return XDP_PASS;
+}
+
+
 struct __attribute__((__packed__)) pkt {
   struct ethhdr ether;
   struct iphdr ipv4;
   char payload[1500];
 };
-
-int set_up_maps() {
-    return 0;
-}
 
 int main(int argc, char **argv) {
   
@@ -133,7 +132,7 @@ int main(int argc, char **argv) {
   BPF_MAP_INIT(&ipfix_probe_map, "ipfix_probes", "", "");
 
   bpf_begin();
-functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0, set_up_maps);
+functional_verify(xdp_prog, xdp_spec, test, sizeof(struct pkt), 0);
 }
 
 #endif // KLEE_VERIFICATION

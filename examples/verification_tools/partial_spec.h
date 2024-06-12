@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include "common.h"
 #include "assert.h"
-#include <linux/bpf.h>
 
 #ifndef PARTIAL_SPEC
 #define PARTIAL_SPEC
@@ -52,9 +51,7 @@ void functional_verify(xdp_func xdp_main,
 	ctx_copy.data = (long)packet_copy + eth_offset;
 	ctx_copy.data_end = (long)packet_copy + packet_size;
 
-    for (int i = 0; i < bpf_map_ctr; i++) {
-        bpf_map_stubs[i+bpf_map_ctr] = map_get_copy(bpf_map_stubs[i]);
-    }
+    duplicate_maps();
 
 	struct xdp_end_state spec_end_state = get_xdp_end_state(xdp_spec, &ctx_copy);
     // void* table_copy = map_get_copy(bpf_map_stubs[0]);
