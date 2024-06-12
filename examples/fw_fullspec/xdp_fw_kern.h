@@ -65,15 +65,10 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/partial_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
+	BPF_IGNORE_MAP_STATE();
 	struct ethhdr *ethernet = (struct ethhdr *)(long)ctx->data;
 	struct iphdr *ip = (struct iphdr*)(ethernet+1);
 	struct udphdr *l4 = (struct udphdr*)(ip+1);
-
-	if(ethernet->h_proto != BE_ETH_P_IP)
-		return XDP_DROP;
-
-	if(ip->protocol != IPPROTO_TCP && ip->protocol != IPPROTO_UDP)
-		return XDP_DROP;
 
 	struct flow_ctx_table_key flow_key = { 0 };
 	flow_key.ip_proto = ip->protocol;
@@ -82,9 +77,8 @@ int xdp_fw_spec(struct xdp_md *ctx)
 	flow_key.l4_src = l4->source;
 	flow_key.l4_dst = l4->dest;
 
-	biflow(&flow_key);
-
 	struct flow_ctx_table_leaf *flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
+	
 	if (ctx->ingress_ifindex == B_PORT){
 		if (flow_leaf)
 			return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
@@ -98,7 +92,6 @@ int xdp_fw_spec(struct xdp_md *ctx)
 		
 		return bpf_redirect_map(&tx_port, B_PORT, 0);
 	}
-
 }
 #endif
 
