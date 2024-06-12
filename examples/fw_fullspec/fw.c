@@ -66,8 +66,8 @@ int main(int argc, char** argv){
 	// flow_key.ip_dst = packet->ipv4.daddr;
 	// flow_key.l4_src = packet->tcp.source;
 	// flow_key.l4_dst = packet->tcp.dest;
-  klee_assume(packet->ipv4.saddr <= packet->ipv4.daddr);
-  klee_assume(packet->tcp.source <= packet->tcp.dest);
+  // klee_assume(packet->ipv4.saddr <= packet->ipv4.daddr);
+  // klee_assume(packet->tcp.source <= packet->tcp.dest);
   // BPF_MAP_KEY_EXISTS(&flow_ctx_table, &flow_key);
 
   functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0);

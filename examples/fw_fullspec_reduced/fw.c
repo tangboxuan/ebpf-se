@@ -17,6 +17,10 @@
 #define USES_BPF_MAP_UPDATE_ELEM
 #endif
 
+#ifndef USES_BPF_MAP_DELETE_ELEM
+#define USES_BPF_MAP_DELETE_ELEM
+#endif
+
 #ifndef USES_BPF_REDIRECT_MAP
 #define USES_BPF_REDIRECT_MAP
 #endif
@@ -32,59 +36,41 @@ struct __attribute__((__packed__)) pkt {
 
 #ifdef KLEE_VERIFICATION
 #include "../verification_tools/partial_spec.h"
-int set_up_maps() {
-  /* Init from xdp_fw_user.c */
-  #define num_ports 2
-  int key[num_ports] = {B_PORT,A_PORT};
-	int ifindex_out[num_ports] = {B_PORT,A_PORT};
-
-  for(uint i = 0; i < num_ports; i++){
-    if(bpf_map_update_elem(&tx_port, &key[i], &ifindex_out[i], 0) < 0)
-      return -1;
-  }
-
-  struct flow_ctx_table_key flow_key = {0};
-	flow_key.ip_proto = 6;
-	flow_key.ip_src = 101;
-	flow_key.ip_dst = 102;
-	flow_key.l4_src = 103;
-	flow_key.l4_dst = 104;
-
-  struct flow_ctx_table_leaf new_flow = {0};
-  new_flow.in_port = B_PORT;
-  new_flow.out_port = A_PORT;
-
-  bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
-  return 0;
-  /* Init done */
-}
-
-int dummy_set_up_maps() {
-  return 0;
-}
-
 int main(int argc, char** argv){
   struct pkt *packet = create_packet(sizeof(struct pkt));
   packet->ether.h_proto = BE_ETH_P_IP;
-  packet->ipv4.version = 4;
-  packet->ipv4.protocol = 6;
-  packet->ipv4.ihl = sizeof(struct iphdr) / 4;
-  packet->ipv4.saddr = 101;
-  packet->ipv4.daddr = 102;
-  packet->tcp.doff = sizeof(struct tcphdr) / 4;
-  packet->tcp.source = 103;
-  packet->tcp.dest = 104;
+  packet->ipv4.protocol = IPPROTO_TCP;
+  // packet->ipv4.version = 4;
+  // packet->ipv4.ihl = sizeof(struct iphdr) / 4;
+  // packet->tcp.doff = sizeof(struct tcphdr) / 4;
   struct xdp_md *ctx = create_ctx(packet, sizeof(struct pkt), 0);
-  ctx->data_meta = 0;
-  __u32 temp;
-  ctx->ingress_ifindex = B_PORT;
-  ctx->rx_queue_index = 0;
+  ctx->ingress_ifindex = A_PORT;
+  // ctx->data_meta = 0;
+  // __u32 temp;
+  // klee_make_symbolic(&(temp), sizeof(temp), "VIGOR_DEVICE");
+  // klee_assume(temp==A_PORT||temp==B_PORT);
+  // ctx->ingress_ifindex = temp;
+  // ctx->rx_queue_index = 0;
+  BPF_MAP_INIT(&tx_port, "tx_devices_map", "", "tx_device");
+  BPF_MAP_INIT(&flow_ctx_table, "flowtable", "pkt.flow", "output_port");
+  // #define num_ports 2
+  // int key[num_ports] = {B_PORT,A_PORT};
+	// int ifindex_out[num_ports] = {B_PORT,A_PORT};
 
-  BPF_MAP_INIT(&tx_port, "", "", "");
-  BPF_MAP_INIT(&flow_ctx_table, "", "", "");
+  // for(uint i = 0; i < num_ports; i++){
+  //   if(bpf_map_update_elem(&tx_port, &key[i], &ifindex_out[i], 0) < 0)
+  //     return -1;
+  // }
+  struct flow_ctx_table_key flow_key  = {0};
+  flow_key.ip_proto = packet->ipv4.protocol;
+	flow_key.ip_src = packet->ipv4.saddr;
+	flow_key.ip_dst = packet->ipv4.daddr;
+	flow_key.l4_src = packet->tcp.source;
+	flow_key.l4_dst = packet->tcp.dest;
+  klee_assume(packet->ipv4.saddr <= packet->ipv4.daddr);
+  klee_assume(packet->tcp.source <= packet->tcp.dest);
+  BPF_MAP_KEY_NOT_EXISTS(&flow_ctx_table, &flow_key);
 
-  bpf_begin();
-
-  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0, set_up_maps);
+  functional_verify(xdp_fw_prog, xdp_fw_spec, ctx, sizeof(struct pkt), 0);
 }
 #endif

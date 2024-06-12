@@ -65,23 +65,21 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/partial_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
-	struct flow_ctx_table_leaf new_flow = {0};
-	struct ethhdr *ethernet = get_eth(ctx);
-	struct iphdr *ip = get_ip(ctx);
-	struct tcphdr *l4 = get_tcp_udp(ctx);
+	struct ethhdr *ethernet = (struct ethhdr *)(long)ctx->data;
+	struct iphdr *ip = (struct iphdr*)(ethernet+1);
+	struct udphdr *l4 = (struct udphdr*)(ip+1);
 
-	struct flow_ctx_table_key flow_key = {0};
+	struct flow_ctx_table_key flow_key = { 0 };
 	flow_key.ip_proto = ip->protocol;
 	flow_key.ip_src = ip->saddr;
 	flow_key.ip_dst = ip->daddr;
 	flow_key.l4_src = l4->source;
 	flow_key.l4_dst = l4->dest;
 
-	struct flow_ctx_table_leaf *flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
-
-	assert(flow_leaf->out_port == A_PORT);
-	return XDP_REDIRECT;
-	// return bpf_redirect_map(&tx_port,flow_leaf->out_port, 0);
+	struct flow_ctx_table_leaf new_flow = {A_PORT, B_PORT};
+	bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
+	
+	return bpf_redirect_map(&tx_port, B_PORT, 0);
 }
 #endif
 
@@ -147,7 +145,6 @@ int xdp_fw_prog(struct xdp_md *ctx)
 	bpf_debug("extracting flow key ... \n");
 	/* flow key */
 	flow_key.ip_proto = ip->protocol;
-
 	flow_key.ip_src = ip->saddr;
 	flow_key.ip_dst = ip->daddr;
 	flow_key.l4_src = l4->source;
@@ -155,7 +152,7 @@ int xdp_fw_prog(struct xdp_md *ctx)
 
 	biflow(&flow_key);
 
-	if (ingress_ifindex == B_PORT) {
+	if (ingress_ifindex == B_PORT){
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 			
 		if (flow_leaf)
@@ -164,11 +161,10 @@ int xdp_fw_prog(struct xdp_md *ctx)
 			return XDP_DROP;
 	} else {
 		flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
-			
+		new_flow.in_port = B_PORT;
+		new_flow.out_port = A_PORT; 
 		if (!flow_leaf){
-			new_flow.in_port = B_PORT;
-			new_flow.out_port = A_PORT; //ctx->ingress_ifindex ;
-			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, BPF_ANY);
+			bpf_map_update_elem(&flow_ctx_table, &flow_key, &new_flow, 0);
 		}
 		
 		return bpf_redirect_map(&tx_port, B_PORT, 0);

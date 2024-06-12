@@ -65,7 +65,7 @@ struct bpf_map_def SEC("maps") flow_ctx_table = {
 #include "../verification_tools/partial_spec.h"
 int xdp_fw_spec(struct xdp_md *ctx)
 {
-	BPF_IGNORE_MAP_STATE();
+	// BPF_IGNORE_MAP_STATE();
 	struct ethhdr *ethernet = (struct ethhdr *)(long)ctx->data;
 	struct iphdr *ip = (struct iphdr*)(ethernet+1);
 	struct udphdr *l4 = (struct udphdr*)(ip+1);
@@ -76,6 +76,8 @@ int xdp_fw_spec(struct xdp_md *ctx)
 	flow_key.ip_dst = ip->daddr;
 	flow_key.l4_src = l4->source;
 	flow_key.l4_dst = l4->dest;
+
+	biflow(&flow_key);
 
 	struct flow_ctx_table_leaf *flow_leaf = bpf_map_lookup_elem(&flow_ctx_table, &flow_key);
 	
